@@ -1,0 +1,83 @@
+<svg width="430" height="900" viewBox="0 0 430 900" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg1" x1="0" y1="0" x2="430" y2="900" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F7F8F7"/>
+      <stop offset="1" stop-color="#EEF4F1"/>
+    </linearGradient>
+    <linearGradient id="glass" x1="34" y1="52" x2="396" y2="820" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFFFF" stop-opacity="0.8"/>
+      <stop offset="1" stop-color="#F6F8F7" stop-opacity="0.9"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="150%">
+      <feDropShadow dx="0" dy="16" stdDeviation="24" flood-color="#0D2437" flood-opacity="0.15"/>
+    </filter>
+  </defs>
+
+  <rect width="430" height="900" fill="#0E1E2A"/>
+
+  <g filter="url(#shadow)">
+    <rect x="33" y="28" width="364" height="844" rx="28" fill="url(#glass)"/>
+    <rect x="33" y="28" width="364" height="844" rx="28" stroke="#E6E9E7" stroke-width="2"/>
+  </g>
+
+  <g opacity="0.18">
+    <path d="M40 75C100 90 130 55 166 75C206 96 230 96 267 75C304 54 330 76 390 75V160H40V75Z" fill="#D9E5E3"/>
+    <path d="M0 780C72 760 86 820 132 785C170 754 214 779 260 780C318 781 344 756 430 770V900H0V780Z" fill="#E2EDE8"/>
+  </g>
+
+  <rect x="35" y="36" width="360" height="18" rx="9" fill="#FFFFFF" opacity="0.8"/>
+  <g>
+    <text x="68" y="52" fill="#1B2430" font-family="Arial, sans-serif" font-size="16" font-weight="700">10:18</text>
+    <circle cx="300" cy="49" r="5" fill="#1B2430" opacity="0.7"/>
+    <rect x="310" y="42" width="20" height="14" rx="3" fill="#1B2430" opacity="0.72"/>
+    <path d="M338 45H352V55H338V45Z" fill="#1B2430" opacity="0.7"/>
+    <path d="M356 40H367" stroke="#1B2430" stroke-width="2" stroke-linecap="round"/>
+    <path d="M356 46H370" stroke="#1B2430" stroke-width="2" stroke-linecap="round"/>
+    <path d="M356 52H373" stroke="#1B2430" stroke-width="2" stroke-linecap="round"/>
+  </g>
+
+  <g>
+    <circle cx="215" cy="155" r="34" fill="#EF3B3B"/>
+    <path d="M205 152C205 147.582 208.582 144 213 144H217C221.418 144 225 147.582 225 152V165C225 169.418 221.418 173 217 173H213C208.582 173 205 169.418 205 165V152ZM198 160C198 138.461 214.461 122 236 122C257.539 122 274 138.461 274 160C274 181.539 257.539 198 236 198C214.461 198 198 181.539 198 160ZM216 160C216 148.954 224.954 140 236 140C247.046 140 256 148.954 256 160C256 171.046 247.046 180 236 180C224.954 180 216 171.046 216 160Z" fill="white"/>
+  </g>
+
+  <text x="215" y="260" text-anchor="middle" fill="#1D2A39" font-family="Arial, sans-serif" font-size="60" font-weight="800">Welcome Back</text>
+  <rect x="165" y="287" width="100" height="5" rx="3" fill="#EF3B3B"/>
+
+  <text x="215" y="358" text-anchor="middle" fill="#4C5B66" font-family="Arial, sans-serif" font-size="24" font-weight="400">Sign in to continue saving lives</text>
+  <text x="215" y="390" text-anchor="middle" fill="#4C5B66" font-family="Arial, sans-serif" font-size="24" font-weight="400">with every donation.</text>
+
+  <g>
+    <text x="95" y="485" fill="#5D6973" font-family="Arial, sans-serif" font-size="20" font-weight="700" letter-spacing="1.5">EMAIL ADDRESS</text>
+    <rect x="78" y="500" width="275" height="64" rx="14" fill="#F2F4F3" stroke="#D7DCDD" stroke-width="2"/>
+    <path d="M102 531H148" stroke="#5E6975" stroke-width="2" stroke-linecap="round"/>
+    <path d="M98 518L113 530L128 518" stroke="#5E6975" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+    <rect x="95" y="520" width="15" height="12" rx="2" stroke="#5E6975" stroke-width="2"/>
+    <text x="145" y="535" fill="#9AA3A8" font-family="Arial, sans-serif" font-size="22" font-weight="400">name@example.com</text>
+  </g>
+
+  <g>
+    <text x="95" y="605" fill="#5D6973" font-family="Arial, sans-serif" font-size="20" font-weight="700" letter-spacing="1.5">PASSWORD</text>
+    <text x="300" y="605" text-anchor="end" fill="#EF3B3B" font-family="Arial, sans-serif" font-size="17" font-weight="600">Forgot Password?</text>
+    <rect x="78" y="620" width="275" height="64" rx="14" fill="#F2F4F3" stroke="#D7DCDD" stroke-width="2"/>
+    <path d="M96 640H120V655C120 662.732 113.732 669 106 669H106C98.268 669 92 662.732 92 655V640H96ZM102 631C102 627.686 104.686 625 108 625C111.314 625 114 627.686 114 631V640H102V631Z" stroke="#5E6975" stroke-width="2.5" stroke-linejoin="round"/>
+    <text x="140" y="657" fill="#5E6975" font-family="Arial, sans-serif" font-size="30" font-weight="700">••••••••</text>
+    <circle cx="323" cy="652" r="11" stroke="#5E6975" stroke-width="2.4"/>
+    <path d="M330 659L338 667" stroke="#5E6975" stroke-width="2.4" stroke-linecap="round"/>
+  </g>
+
+  <g>
+    <rect x="78" y="720" width="275" height="64" rx="14" fill="#EF3B3B"/>
+    <text x="215" y="762" text-anchor="middle" fill="#FFFFFF" font-family="Arial, sans-serif" font-size="32" font-weight="800" letter-spacing="1">SIGN IN</text>
+  </g>
+
+  <g>
+    <text x="215" y="840" text-anchor="middle" fill="#4E5964" font-family="Arial, sans-serif" font-size="24" font-weight="400">New to the mission ?</text>
+    <text x="305" y="840" fill="#EF3B3B" font-family="Arial, sans-serif" font-size="24" font-weight="700">Create Account</text>
+  </g>
+
+  <g opacity="0.8">
+    <rect x="170" y="875" width="95" height="6" rx="3" fill="#D9DEDB"/>
+    <circle cx="280" cy="878" r="5" fill="#FFFFFF" stroke="#D9DEDB" stroke-width="2"/>
+  </g>
+</svg>
