@@ -356,126 +356,115 @@ const Emergency = () => {
   const fetchData = async () => {
     try {
       // ==================================================
-      // 1. FETCH BLOOD REQUESTS
+      // 1. FETCH ACTIVE EMERGENCIES DIRECTLY
+      // ==================================================
+      //
+      // IMPORTANT:
+      // Emergency requests are created in the EmergencyRequests table.
+      // Previously this screen was rebuilding them from "blood-requests",
+      // which could miss the newly-created emergency and leave My Requests
+      // empty. Read the real emergency API instead.
       // ==================================================
 
-      const requestsQuery = query(
-        collection(
-          db,
-          "blood-requests"
-        ),
-        orderBy(
-          "createdAt",
-          "desc"
-        )
-      );
+      const activeEmergencies =
+        await apiRequest<any[]>("/api/emergencies/active");
 
-      const requestsSnapshot =
-        await getDocs(
-          requestsQuery
-        );
+      const linkedRequests = (
+        Array.isArray(activeEmergencies)
+          ? activeEmergencies
+          : []
+      )
+        .filter((emergency: any) => {
+          const status = String(
+            emergency.status || "Active"
+          ).toLowerCase();
 
-      const urgentRequestList:
-        any[] = [];
+          return (
+            status !== "completed" &&
+            status !== "cancelled" &&
+            status !== "canceled" &&
+            status !== "resolved"
+          );
+        })
+        .map((emergency: any) => ({
+          ...emergency,
 
-      requestsSnapshot.forEach(
-        (document: any) => {
-          const data =
-            document.data();
-
-          const status =
-            data.status ||
-            "Pending";
-
-          if (
-            data.requestType ===
-              "Emergency" &&
-            status !==
-              "Completed" &&
-            status !==
-              "Cancelled"
-          ) {
-            urgentRequestList.push(
-              {
-                id:
-                  document.id,
-                ...data,
-              }
-            );
-          }
-        }
-      );
-
-      // ==================================================
-      // LINK EMERGENCY RESPONSE COUNTS
-      // ==================================================
-
-      const emergencyCasesSnapshot = await getDocs(
-        collection(
-          db,
-          "community_notifications"
-        )
-      );
-
-      const emergencyMap: Record<string, any> = {};
-
-      emergencyCasesSnapshot.forEach((document: any) => {
-        const data = document.data();
-
-        if (
-          data.type === "emergency" &&
-          data.emergencyId
-        ) {
-          emergencyMap[data.emergencyId] = {
-            respondingDonorsCount:
-              data.respondingDonorsCount || 0,
-
-            donorResponses:
-              data.donorResponses || [],
-
-            emergencyStatus:
-              data.status || "Active",
-
-            reporterUid:
-              data.reporterUid || "",
-          };
-        }
-      });
-
-      const linkedRequests = urgentRequestList.map(
-        (request) => ({
-          ...request,
-
-          respondingDonorsCount:
-            request.emergencyId
-              ? emergencyMap[request.emergencyId]
-                  ?.respondingDonorsCount || 0
-              : 0,
-
-          donorResponses:
-            request.emergencyId
-              ? emergencyMap[request.emergencyId]
-                  ?.donorResponses || []
-              : [],
-
-          emergencyStatus:
-            request.emergencyId
-              ? emergencyMap[request.emergencyId]
-                  ?.emergencyStatus || "Active"
-              : "Active",
+          // Keep the existing UI contract intact.
+          id: String(emergency.id),
+          emergencyId: String(emergency.id),
+          emergencyRequestId: String(emergency.id),
+          requestType: "Emergency",
 
           reporterUid:
-            request.reporterUid ||
-            (request.emergencyId
-              ? emergencyMap[request.emergencyId]
-                  ?.reporterUid || ""
-              : ""),
-        })
-      );
+            emergency.reporterUid
+              ? String(emergency.reporterUid)
+              : "",
 
-      setRequests(
-        linkedRequests
-      );
+          reporterName:
+            emergency.reporterName ||
+            "Community Member",
+
+          patientName:
+            emergency.reporterName ||
+            "Community Member",
+
+          contactPhone:
+            emergency.phoneNumber ||
+            emergency.contactPhone ||
+            "",
+
+          urgency:
+            emergency.priority ||
+            emergency.urgency ||
+            "High",
+
+          emergencyStatus:
+            emergency.status ||
+            "Active",
+
+          bloodSource:
+            emergency.bloodSource ||
+            "Community Donors",
+
+          reservedUnits:
+            Number(
+              emergency.reservedUnits || 0
+            ),
+
+          respondingDonorsCount:
+            Number(
+              emergency.respondingDonorsCount || 0
+            ),
+
+          donorResponses:
+            Array.isArray(
+              emergency.donorResponses
+            )
+              ? emergency.donorResponses
+              : [],
+
+          createdAt:
+            emergency.createdAt,
+
+          updatedAt:
+            emergency.updatedAt,
+
+          expireAt:
+            emergency.expireAt,
+        }))
+        .sort((a: any, b: any) => {
+          const aTime = new Date(
+            a.createdAt || 0
+          ).getTime();
+
+          const bTime = new Date(
+            b.createdAt || 0
+          ).getTime();
+
+          return bTime - aTime;
+        });
+
+      setRequests(linkedRequests);
 
       // ==================================================
       // 2. FETCH MY EMERGENCY RESPONSES
@@ -1525,11 +1514,17 @@ const Emergency = () => {
         // Push notifications are handled by the ASP.NET Core backend.
         // Do not send Expo push notifications directly from the mobile app.
 
-        const continueAfterSubmission = () => {
-          fetchData();
+        const continueAfterSubmission = async () => {
           setActiveTab("requests");
           setRequestSubView("my");
-          router.replace("/home/emergency?view=requests" as any);
+
+          // Reload from the real Emergency API before opening My Requests,
+          // so the request that was just posted appears immediately.
+          await fetchData();
+
+          router.replace(
+            "/home/emergency?view=requests" as any
+          );
         };
 
         if (reserveResult.reserved) {
@@ -1682,102 +1677,83 @@ const Emergency = () => {
       return "Just now";
     }
 
-    const date =
-      timestamp.toDate
-        ? timestamp.toDate()
-        : new Date(
-            timestamp
-          );
+    try {
+      let date: Date;
 
-    const seconds =
-      Math.floor(
-        (
-          new Date().getTime() -
-          date.getTime()
-        ) / 1000
-      );
+      if (timestamp?.toDate) {
+        date = timestamp.toDate();
+      } else if (
+        typeof timestamp === "object" &&
+        typeof timestamp?.seconds === "number"
+      ) {
+        date = new Date(timestamp.seconds * 1000);
+      } else if (typeof timestamp === "string") {
+        const value = timestamp.trim();
 
-    let interval =
-      seconds /
-      31536000;
+        // ASP.NET/SQL may return a UTC DateTime without the trailing Z.
+        // Treat timezone-less API timestamps as UTC so Pakistan (+05:00)
+        // does not incorrectly display them as ~5 hours old.
+        const hasTimezone =
+          /(?:Z|[+-]\d{2}:\d{2})$/i.test(value);
 
-    if (
-      interval > 1
-    ) {
-      return (
+        date = new Date(
+          hasTimezone ? value : `${value}Z`
+        );
+      } else {
+        date = new Date(timestamp);
+      }
+
+      if (Number.isNaN(date.getTime())) {
+        return "Just now";
+      }
+
+      // Never show negative relative time if device/server clocks
+      // differ by a few seconds.
+      const seconds = Math.max(
+        0,
         Math.floor(
-          interval
-        ) +
-        " years ago"
+          (Date.now() - date.getTime()) / 1000
+        )
       );
+
+      if (seconds < 10) {
+        return "Just now";
+      }
+
+      if (seconds < 60) {
+        return `${seconds} secs ago`;
+      }
+
+      const minutes = Math.floor(seconds / 60);
+
+      if (minutes < 60) {
+        return `${minutes} min${minutes === 1 ? "" : "s"} ago`;
+      }
+
+      const hours = Math.floor(minutes / 60);
+
+      if (hours < 24) {
+        return `${hours} hour${hours === 1 ? "" : "s"} ago`;
+      }
+
+      const days = Math.floor(hours / 24);
+
+      if (days < 30) {
+        return `${days} day${days === 1 ? "" : "s"} ago`;
+      }
+
+      const months = Math.floor(days / 30);
+
+      if (months < 12) {
+        return `${months} month${months === 1 ? "" : "s"} ago`;
+      }
+
+      const years = Math.floor(days / 365);
+
+      return `${years} year${years === 1 ? "" : "s"} ago`;
+    } catch {
+      return "Just now";
     }
-
-    interval =
-      seconds /
-      2592000;
-
-    if (
-      interval > 1
-    ) {
-      return (
-        Math.floor(
-          interval
-        ) +
-        " months ago"
-      );
-    }
-
-    interval =
-      seconds /
-      86400;
-
-    if (
-      interval > 1
-    ) {
-      return (
-        Math.floor(
-          interval
-        ) +
-        " days ago"
-      );
-    }
-
-    interval =
-      seconds /
-      3600;
-
-    if (
-      interval > 1
-    ) {
-      return (
-        Math.floor(
-          interval
-        ) +
-        " hours ago"
-      );
-    }
-
-    interval =
-      seconds /
-      60;
-
-    if (
-      interval > 1
-    ) {
-      return (
-        Math.floor(
-          interval
-        ) +
-        " mins ago"
-      );
-    }
-
-    return (
-      Math.floor(
-        seconds
-      ) +
-      " secs ago"
-    );
   };
 
   // ======================================================

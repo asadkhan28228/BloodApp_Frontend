@@ -4,22 +4,15 @@ import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { doc, getDoc } from "@/src/lib/backendCompat";
 import React, { useEffect, useState } from "react";
 import Avatar from "@/src/components/Avatar";
-import {
-  ActivityIndicator,
-  Alert,
-  Linking,
-  ScrollView,
-  StatusBar,
-  Text,
-  TouchableOpacity,
-  View,
-} from "react-native";
+import { ActivityIndicator,Alert,Linking,ScrollView,StatusBar,Text,TouchableOpacity,View,} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useUserStore } from "@/src/store/userStore";
 import { calculateDistance } from "@/src/utils/distanceUtils";
 import { getFreshGpsLocation } from "@/src/utils/locationService";
 
+
 const DonorProfile = () => {
+
   const params = useLocalSearchParams<{ id?: string | string[] }>();
   const id = Array.isArray(params.id) ? params.id[0] : params.id;
   const router = useRouter();
@@ -35,9 +28,10 @@ const DonorProfile = () => {
           const docSnap = await getDoc(docRef);
           if (docSnap.exists()) {
             setDonor({ id: docSnap.id, ...docSnap.data() });
-          } else {
-            setDonor(null);
           }
+           else {
+              setDonor(null);
+            }
         } else {
           setDonor(null);
         }

@@ -405,7 +405,18 @@ const StockSection = () => {
                         }))
                       }
                       keyboardType="number-pad"
-                      className="mx-1.5 h-9 w-14 rounded-xl border border-gray-200 bg-gray-50 text-center text-sm font-black text-gray-900"
+                      selectTextOnFocus
+                      className="mx-1.5 h-10 w-14 rounded-xl border border-gray-200 bg-white"
+                      style={{
+                        color: "#111827",
+                        fontSize: 16,
+                        fontWeight: "900",
+                        textAlign: "center",
+                        textAlignVertical: "center",
+                        paddingVertical: 0,
+                        paddingHorizontal: 0,
+                        includeFontPadding: false,
+                      }}
                     />
 
                     <TouchableOpacity
