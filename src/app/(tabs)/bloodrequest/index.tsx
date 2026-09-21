@@ -18,12 +18,14 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useUserStore } from "@/src/store/userStore";
+import { useRouter } from "expo-router";
 
 const BloodTypes = ["A+", "A-", "B+", "B-", "O+", "O-", "AB+", "AB-"];
 const UrgencyLevels = ["Normal", "Urgent", "Critical"] as const;
 type UrgencyLevel = (typeof UrgencyLevels)[number];
 
 const BloodRequests = () => {
+  const router = useRouter();
   const { user: currentUserData } = useUserStore();
   const [patientName, setPatientName] = useState("");
   const [selectedBloodType, setSelectedBloodType] = useState("");
@@ -243,7 +245,7 @@ const BloodRequests = () => {
       const latitude = selectedCoordinates?.latitude ?? null;
       const longitude = selectedCoordinates?.longitude ?? null;
 
-      await addDoc(collection(db, "blood-requests"), {
+      const requestRef = await addDoc(collection(db, "blood-requests"), {
         patientName: patientName.trim(),
         bloodType: selectedBloodType,
         urgency: selectedUrgency,
@@ -273,19 +275,40 @@ const BloodRequests = () => {
           unread: true,
           icon: "water",
           color: "#DC2626",
+          bloodRequestId: requestRef.id,
+          requestId: requestRef.id,
           reporterUid: currentUid,
+          reporterName: currentUserData?.fullName || auth.currentUser?.displayName || "A Hero",
+          patientName: patientName.trim(),
+          bloodType: selectedBloodType,
+          urgency: selectedUrgency,
+          hospitalName: hospitalName.trim(),
+          location: location || locationDisplay.trim(),
+          latitude,
+          longitude,
+          phoneNumber: normalizedPhone,
+          contactPhone: normalizedPhone,
+          unitsNeeded: units,
+          details: additionalNotes.trim(),
+          donorResponses: [],
         });
       } catch (error) {
         console.error("Error creating community notification:", error);
       }
 
-      // Expo push notifications are sent by the ASP.NET Core backend.
-      // The mobile app only creates the blood request/community notification.
+      // Firestore stores the request and its community notification.
 
       Alert.alert(
         "Request Submitted",
         "Your blood request has been posted successfully. Nearby donors can now see it.",
-        [{ text: "Done" }],
+        [
+          {
+            text: "Done",
+            onPress: () => {
+              router.replace("/(tabs)/home/requests" as any);
+            },
+          },
+        ],
       );
 
       setPatientName("");

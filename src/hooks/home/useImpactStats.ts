@@ -1,7 +1,5 @@
 import { useEffect, useState } from "react";
-import { collection, onSnapshot } from "@/src/lib/backendCompat";
-
-import { db } from "../../config/backendConfig";
+import { apiRequest } from "@/src/lib/api";
 
 export type ImpactStats = {
   donations: number;
@@ -21,66 +19,86 @@ export const useImpactStats = () => {
   const [stats, setStats] = useState<ImpactStats>(initialStats);
 
   useEffect(() => {
-    let users: any[] = [];
-    let completedRequests = 0;
-    let completedEmergencyResponses = 0;
+    let mounted = true;
 
-    const updateStats = () => {
-      const activeDonors = users.filter(
-        (user) =>
-          user.role !== "admin" &&
-          user.role !== "bloodBankAdmin" &&
-          user.bloodType &&
-          user.isActive !== false,
-      );
-      const donations = activeDonors.reduce(
-        (total, user) => total + Math.max(0, Number(user.donationsCount) || 0),
-        0,
-      );
+    const loadImpactStats = async () => {
+      try {
+        // Logged-in user's latest profile
+        const profile = await apiRequest<any>("/api/auth/profile");
 
-      setStats({
-        donations,
-        livesSaved: completedRequests + completedEmergencyResponses,
-        bloodDonors: activeDonors.length,
-        donatedMl: donations * 540,
-      });
+        // Users are still loaded to calculate active donor count
+        let users: any[] = [];
+
+        try {
+          users = await apiRequest<any[]>("/api/user");
+        } catch {
+          try {
+            users = await apiRequest<any[]>("/api/user/donors");
+          } catch {
+            users = [];
+          }
+        }
+
+        if (!mounted) {
+          return;
+        }
+
+        const donations = Math.max(
+          0,
+          Number(
+            profile?.donationsCount ??
+              profile?.DonationsCount ??
+              0,
+          ) || 0,
+        );
+
+        const livesSaved = Math.max(
+          0,
+          Number(
+            profile?.livesSaved ??
+              profile?.LivesSaved ??
+              0,
+          ) || 0,
+        );
+
+        const activeDonors = users.filter(
+          (user) =>
+            user.role !== "admin" &&
+            user.role !== "bloodBankAdmin" &&
+            user.bloodType &&
+            user.isActive !== false,
+        );
+
+        setStats({
+          donations,
+          livesSaved,
+          bloodDonors: activeDonors.length,
+          donatedMl: donations * 540,
+        });
+      } catch (error) {
+        console.error(
+          "Failed to load impact stats:",
+          error,
+        );
+
+        if (mounted) {
+          setStats(initialStats);
+        }
+      }
     };
 
-    const unsubscribeUsers = onSnapshot(collection(db, "users"), (snapshot : any) => {
-      users = snapshot.docs.map((document : any) => document.data());
-      updateStats();
-    });
+    loadImpactStats();
 
-    const unsubscribeRequests = onSnapshot(
-      collection(db, "blood-requests"),
-      (snapshot : any) => {
-        completedRequests = snapshot.docs.filter(
-          (document : any) => document.data().status === "Completed",
-        ).length;
-        updateStats();
-      },
-    );
-
-    const unsubscribeCommunity = onSnapshot(
-      collection(db, "community_notifications"),
-      (snapshot : any) => {
-        completedEmergencyResponses = snapshot.docs.filter(
-          (document : any) => {
-            const data = document.data();
-            return (
-              data.type === "emergency_response" &&
-              data.responseStatus === "Completed"
-            );
-          },
-        ).length;
-        updateStats();
-      },
+    // Refresh stats so confirmed donations are reflected
+    // without requiring an app restart.
+    const interval = setInterval(
+      loadImpactStats,
+      5000,
     );
 
     return () => {
-      unsubscribeUsers();
-      unsubscribeRequests();
-      unsubscribeCommunity();
+      mounted = false;
+      clearInterval(interval);
     };
   }, []);
 

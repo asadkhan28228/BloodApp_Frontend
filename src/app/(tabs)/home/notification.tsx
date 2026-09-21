@@ -26,7 +26,11 @@ interface NotificationItem {
     | "system"
     | "community"
     | "emergency"
-    | "emergency_response";
+    | "emergency_response"
+    | "blood_request_response"
+    | "blood_request_confirmed"
+    | "blood_request_rejected"
+    | "donation_completed";
 
   title: string;
   message: string;
@@ -62,6 +66,20 @@ interface NotificationItem {
   userId?: string;
   emergencyId?: string;
   emergencyRequestId?: string;
+  referenceId?: string;
+  bloodRequestId?: string;
+}
+
+interface BloodRequestResponder {
+  id: string;
+  bloodRequestId: string;
+  donorId: string;
+  donorName: string;
+  donorPhone?: string;
+  bloodType?: string;
+  status: string;
+  createdAt: any;
+  updatedAt?: any;
 }
 
 /* =========================================================
@@ -230,6 +248,10 @@ const Notification = () => {
   const [modalVisible, setModalVisible] = useState(false);
 
   const [actionLoading, setActionLoading] = useState(false);
+  const [bloodResponders, setBloodResponders] = useState<BloodRequestResponder[]>([]);
+  const [respondersLoading, setRespondersLoading] = useState(false);
+  const [responderModalVisible, setResponderModalVisible] = useState(false);
+  const [selectedBloodRequestId, setSelectedBloodRequestId] = useState<string | null>(null);
 
   const [selectedNotificationKeys, setSelectedNotificationKeys] =
     useState<string[]>([]);
@@ -268,16 +290,56 @@ const Notification = () => {
      REST + SIGNALR NOTIFICATIONS
   ========================================================= */
 
-  const normalizeNotification = (raw: any, isCommunity: boolean): NotificationItem => ({
-    ...raw,
-    id: String(raw.id),
-    isCommunity,
-    unread: raw.unread ?? true,
-    icon: raw.icon || "notifications-outline",
-    color: raw.color || "#DC2626",
-    emergencyId: raw.emergencyId || raw.emergencyRequestId || raw.referenceId,
-    responseStatus: raw.responseStatus || raw.status,
-  });
+  const normalizeNotification = (
+    raw: any,
+    isCommunity: boolean
+  ): NotificationItem => {
+    const rawType = raw.type ?? raw.Type ?? "";
+    const type = String(rawType).trim().toLowerCase();
+
+    const referenceId =
+      raw.referenceId ??
+      raw.ReferenceId ??
+      raw.bloodRequestId ??
+      raw.BloodRequestId;
+
+    const isEmergencyNotification =
+      type === "emergency" ||
+      type === "emergency_response";
+
+    return {
+      ...raw,
+      id: String(raw.id ?? raw.Id),
+      type: type as NotificationItem["type"],
+      title: raw.title ?? raw.Title ?? "Notification",
+      message: raw.message ?? raw.Message ?? "",
+      createdAt: raw.createdAt ?? raw.CreatedAt,
+      isCommunity,
+      unread: raw.unread ?? raw.Unread ?? true,
+      icon: raw.icon ?? raw.Icon ?? "notifications-outline",
+      color: raw.color ?? raw.Color ?? "#DC2626",
+      referenceId: referenceId ? String(referenceId) : undefined,
+      bloodRequestId:
+        raw.bloodRequestId ??
+        raw.BloodRequestId ??
+        (!isEmergencyNotification && referenceId
+          ? String(referenceId)
+          : undefined),
+      emergencyId:
+        raw.emergencyId ??
+        raw.EmergencyId ??
+        raw.emergencyRequestId ??
+        raw.EmergencyRequestId ??
+        (isEmergencyNotification && referenceId
+          ? String(referenceId)
+          : undefined),
+      responseStatus:
+        raw.responseStatus ??
+        raw.ResponseStatus ??
+        raw.status ??
+        raw.Status,
+    };
+  };
 
   const sortAndDedupe = (items: NotificationItem[]) =>
     items
@@ -387,14 +449,26 @@ const Notification = () => {
       }
     }
 
-    if (
-      item.type === "emergency" ||
-      item.type === "emergency_response"
-    ) {
+    if (item.type === "emergency" || item.type === "emergency_response") {
       setSelectedNotif({ ...item, unread: false });
       setModalVisible(true);
+      return;
+    }
+    const normalizedType = String(item.type || "")
+      .trim()
+      .toLowerCase();
+
+    const isBloodResponseNotification =
+      normalizedType === "blood_request_response" ||
+      normalizedType === "bloodrequestresponse";
+
+    if (isBloodResponseNotification) {
+      // Notification is informational only.
+      // Donor confirmation is managed from Blood Requests > My Requests.
+      return;
     }
   };
+
 
   const handleDeleteSelectedNotifications = () => {
     const selectedNotifications = notifications.filter((item) =>
@@ -522,6 +596,92 @@ const Notification = () => {
       );
     });
   };
+
+  /* NORMAL BLOOD REQUEST RESPONDERS */
+  const loadBloodRequestResponders = async (
+    bloodRequestId: string
+  ) => {
+    setSelectedBloodRequestId(bloodRequestId);
+    setResponderModalVisible(true);
+    setRespondersLoading(true);
+
+    try {
+      const data =
+        await apiRequest<BloodRequestResponder[]>(
+          `/api/blood-requests/${bloodRequestId}/responses`
+        );
+
+      setBloodResponders(
+        (data || []).map((response: any) => ({
+          id: String(response.id ?? response.Id),
+          bloodRequestId: String(
+            response.bloodRequestId ??
+            response.BloodRequestId ??
+            bloodRequestId
+          ),
+          donorId: String(
+            response.donorId ??
+            response.DonorId ??
+            ""
+          ),
+          donorName:
+            response.donorName ??
+            response.DonorName ??
+            "Donor",
+          donorPhone:
+            response.donorPhone ??
+            response.DonorPhone,
+          bloodType:
+            response.bloodType ??
+            response.BloodType,
+          status:
+            response.status ??
+            response.Status ??
+            "Pending",
+          createdAt:
+            response.createdAt ??
+            response.CreatedAt,
+          updatedAt:
+            response.updatedAt ??
+            response.UpdatedAt,
+        }))
+      );
+    } catch (error: any) {
+      console.error(
+        "Could not load blood request responders:",
+        error
+      );
+
+      setBloodResponders([]);
+
+      Alert.alert(
+        "Could Not Load Responders",
+        error?.message ||
+          "Responder details could not be loaded."
+      );
+    } finally {
+      setRespondersLoading(false);
+    }
+  };
+  const refreshBloodResponders = async () => {
+    if (!selectedBloodRequestId) return;
+    await loadBloodRequestResponders(
+      selectedBloodRequestId
+    );
+  };
+  const runResponderAction = async (response: BloodRequestResponder, action: "confirm" | "reject" | "complete") => {
+    if (!selectedBloodRequestId || actionLoading) return;
+    setActionLoading(true);
+    try {
+      await apiRequest(`/api/blood-requests/${selectedBloodRequestId}/responses/${response.id}/${action}`, { method: "PATCH" });
+      await refreshBloodResponders(); await loadNotifications();
+      Alert.alert(action === "complete" ? "Donation Completed ❤️" : action === "confirm" ? "Donor Confirmed" : "Response Rejected", action === "complete" ? "Donation count and last donation date have been updated." : "Status updated successfully.");
+    } catch (error: any) { Alert.alert("Action Failed", error?.message || "Could not update donor response."); }
+    finally { setActionLoading(false); }
+  };
+  const handleConfirmResponder = (r: BloodRequestResponder) => Alert.alert("Confirm Donor", `Confirm ${r.donorName} as donor?`, [{text:"Cancel",style:"cancel"},{text:"Confirm",onPress:()=>runResponderAction(r,"confirm")}]);
+  const handleRejectResponder = (r: BloodRequestResponder) => Alert.alert("Reject Donor", `Reject ${r.donorName}'s response?`, [{text:"Cancel",style:"cancel"},{text:"Reject",style:"destructive",onPress:()=>runResponderAction(r,"reject")}]);
+  const handleCompleteDonation = (r: BloodRequestResponder) => Alert.alert("Complete Donation", "Only continue after blood has actually been donated. This updates donation count and last donation date.", [{text:"Cancel",style:"cancel"},{text:"Complete",onPress:()=>runResponderAction(r,"complete")}]);
 
   /* =========================================================
      OFFER HELP / DONATE
@@ -1188,6 +1348,7 @@ const Notification = () => {
           </View>
         </View>
       </Modal>
+
     </SafeAreaView>
   );
 };

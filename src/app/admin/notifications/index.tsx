@@ -57,7 +57,7 @@ const AdminNotifications = () => {
 
       const list: NotificationItem[] = [];
 
-      snapshot.forEach((notificationDoc) => {
+      snapshot.forEach((notificationDoc : any) => {
         list.push({
           id: notificationDoc.id,
           ...notificationDoc.data(),

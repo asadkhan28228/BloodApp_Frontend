@@ -2,10 +2,20 @@ import * as Location from "expo-location";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
 import { router } from "expo-router";
-import { signOut } from "@/src/lib/backendCompat";
-import { doc, serverTimestamp, updateDoc } from "@/src/lib/backendCompat";
-import React, { useCallback, useEffect, useState } from "react";
+import {
+  signOut,
+  doc,
+  serverTimestamp,
+  updateDoc,
+} from "@/src/lib/backendCompat";
+import React, {
+  useCallback,
+  useEffect,
+  useState,
+} from "react";
+
 import Avatar from "../../../components/Avatar";
+
 import {
   ActivityIndicator,
   Alert,
@@ -20,195 +30,404 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
-import { auth, db } from "../../../config/backendConfig";
 
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
+
+import { auth, db } from "../../../config/backendConfig";
 import { useUserStore } from "../../../store/userStore";
 import { getFreshGpsLocation } from "../../../utils/locationService";
 
+/* =========================================================
+   SECTION HEADER
+========================================================= */
+
 const SectionHeader = ({ title }: { title: string }) => (
-  <Text className="mb-3 mt-5 px-6 text-[11px] font-bold uppercase tracking-widest text-slate-500">
+  <Text className="mb-2 mt-5 px-5 text-[11px] font-black uppercase tracking-[2px] text-slate-500">
     {title}
   </Text>
 );
+
+/* =========================================================
+   MENU ITEM
+========================================================= */
 
 const MenuItem = ({
   icon,
   title,
   subtitle,
   onPress,
-  color = "text-gray-900",
+  rightText,
 }: any) => (
   <TouchableOpacity
     onPress={onPress}
-    className="mx-4 mb-2 flex-row items-center justify-between rounded-2xl border border-gray-100 bg-white px-4 py-3.5"
+    activeOpacity={0.75}
+    className="mx-4 mb-2 flex-row items-center rounded-2xl border border-gray-100 bg-white px-4 py-3"
+    style={{
+      shadowColor: "#000",
+      shadowOffset: {
+        width: 0,
+        height: 2,
+      },
+      shadowOpacity: 0.035,
+      shadowRadius: 5,
+      elevation: 1,
+    }}
   >
-    <View className="flex-row items-center flex-1">
-      <View className="h-10 w-10 items-center justify-center rounded-xl bg-white shadow-sm">
-        <Ionicons name={icon} size={22} color="#DC2626" />
-      </View>
-      <View className="ml-4 flex-1">
-        <Text className={`text-base font-bold ${color}`}>{title}</Text>
-        {subtitle && (
-          <Text className="text-xs font-medium text-gray-400">{subtitle}</Text>
-        )}
-      </View>
+    {/* Icon */}
+    <View className="h-9 w-9 items-center justify-center">
+      <Ionicons
+        name={icon}
+        size={21}
+        color="#E11D48"
+      />
     </View>
-    <Ionicons name="chevron-forward" size={20} color="#D1D5DB" />
+
+    {/* Text */}
+    <View className="ml-3 flex-1">
+      <Text className="text-[15px] font-extrabold text-slate-900">
+        {title}
+      </Text>
+
+      {subtitle ? (
+        <Text
+          numberOfLines={2}
+          className="mt-0.5 text-[11px] font-medium leading-4 text-slate-400"
+        >
+          {subtitle}
+        </Text>
+      ) : null}
+    </View>
+
+    {/* Right */}
+    {rightText ? (
+      <Text className="text-[12px] font-extrabold text-red-600">
+        {rightText}
+      </Text>
+    ) : (
+      <Ionicons
+        name="chevron-forward"
+        size={18}
+        color="#CBD5E1"
+      />
+    )}
   </TouchableOpacity>
 );
 
-const MenuSwitch = ({ icon, title, value, onValueChange }: any) => (
-  <View className="mx-4 mb-2 flex-row items-center justify-between rounded-2xl border border-gray-100 bg-white px-4 py-3.5">
-    <View className="flex-row items-center flex-1">
-      <View className="h-10 w-10 items-center justify-center rounded-xl bg-white shadow-sm">
-        <Ionicons name={icon} size={22} color="#DC2626" />
-      </View>
-      <Text className="ml-4 flex-1 text-base font-bold text-gray-900">
+/* =========================================================
+   MENU SWITCH
+========================================================= */
+
+const MenuSwitch = ({
+  icon,
+  title,
+  subtitle,
+  value,
+  onValueChange,
+  disabled = false,
+}: any) => (
+  <View
+    className="mx-4 mb-2 flex-row items-center rounded-2xl border border-gray-100 bg-white px-4 py-3"
+    style={{
+      shadowColor: "#000",
+      shadowOffset: {
+        width: 0,
+        height: 2,
+      },
+      shadowOpacity: 0.035,
+      shadowRadius: 5,
+      elevation: 1,
+    }}
+  >
+    {/* Icon */}
+    <View className="h-9 w-9 items-center justify-center">
+      <Ionicons
+        name={icon}
+        size={21}
+        color="#E11D48"
+      />
+    </View>
+
+    {/* Text */}
+    <View className="ml-3 flex-1">
+      <Text className="text-[15px] font-extrabold text-slate-900">
         {title}
       </Text>
+
+      {subtitle ? (
+        <Text className="mt-0.5 text-[11px] font-medium text-slate-400">
+          {subtitle}
+        </Text>
+      ) : null}
     </View>
+
+    {/* Switch */}
     <Switch
       value={value}
       onValueChange={onValueChange}
-      trackColor={{ false: "#E2E8F0", true: "#F8B4BB" }}
-      thumbColor={value ? "#E63946" : "#F1F5F9"}
+      disabled={disabled}
+      trackColor={{
+        false: "#E2E8F0",
+        true: "#FDA4AF",
+      }}
+      thumbColor={value ? "#E11D48" : "#F8FAFC"}
     />
   </View>
 );
 
-const Profile = () => {
-  const { user: userData, loading, setUser } = useUserStore();
-  const insets = useSafeAreaInsets();
-  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
-  const [availableToDonate, setAvailableToDonate] = useState(true);
-  // True while we're capturing a fresh GPS fix after the donor
-  // switches "Available to Donate" ON. Used only to block a second
-  // tap mid-request — it never blocks the rest of the screen.
-  const [updatingAvailability, setUpdatingAvailability] = useState(false);
+/* =========================================================
+   PROFILE SCREEN
+========================================================= */
 
-  // Edit Modal State
-  const [isEditModalVisible, setIsEditModalVisible] = useState(false);
+const Profile = () => {
+  const {
+    user: userData,
+    loading,
+    setUser,
+  } = useUserStore();
+
+  const insets = useSafeAreaInsets();
+
+  const [notificationsEnabled, setNotificationsEnabled] =
+    useState(true);
+
+  const [availableToDonate, setAvailableToDonate] =
+    useState(true);
+
+  const [
+    updatingAvailability,
+    setUpdatingAvailability,
+  ] = useState(false);
+
+  /* =======================================================
+     EDIT PROFILE STATE
+  ======================================================= */
+
+  const [
+    isEditModalVisible,
+    setIsEditModalVisible,
+  ] = useState(false);
+
   const [editName, setEditName] = useState("");
   const [editPhone, setEditPhone] = useState("");
   const [editLocation, setEditLocation] = useState("");
   const [editBloodType, setEditBloodType] = useState("");
-  const [isUpdating, setIsUpdating] = useState(false);
 
-  const bloodTypes = ["A+", "A-", "B+", "B-", "O+", "O-", "AB+", "AB-"];
+  const [isUpdating, setIsUpdating] =
+    useState(false);
+
+  const bloodTypes = [
+    "A+",
+    "A-",
+    "B+",
+    "B-",
+    "O+",
+    "O-",
+    "AB+",
+    "AB-",
+  ];
+
+  /* =======================================================
+     SYNC AVAILABILITY
+  ======================================================= */
 
   useEffect(() => {
-    if (userData && userData.availableToDonate !== undefined) {
-      setAvailableToDonate(userData.availableToDonate);
+    if (
+      userData &&
+      userData.availableToDonate !== undefined
+    ) {
+      setAvailableToDonate(
+        userData.availableToDonate,
+      );
     }
   }, [userData]);
 
-  // ======================================================
-  // KEEP AN AVAILABLE DONOR'S LOCATION FRESH
-  //
-  // Every time this donor opens the Profile tab (not just
-  // when they flip the switch), we silently grab their
-  // current GPS fix and save it — but ONLY while they are
-  // marked available. Donors who are unavailable are already
-  // excluded from every donor list, so there's no need to
-  // spend a GPS call refreshing their location.
-  //
-  // This runs quietly in the background: no alert, no loading
-  // spinner — if it fails (no permission, no signal) we just
-  // keep whatever location was already saved.
-  // ======================================================
+  /* =======================================================
+     REFRESH AVAILABLE DONOR LOCATION
+  ======================================================= */
+
   useFocusEffect(
     useCallback(() => {
       if (!availableToDonate) return;
 
-      const refreshLocationInBackground = async () => {
-        const user = auth.currentUser;
-        if (!user) return;
+      const refreshLocationInBackground =
+        async () => {
+          const user = auth.currentUser;
 
-        const freshLocation = await getFreshGpsLocation();
-        if (!freshLocation) return;
+          if (!user) return;
 
-        try {
-          const liveCity = await Location.reverseGeocodeAsync({
-            latitude: freshLocation.latitude,
-            longitude: freshLocation.longitude,
-          });
+          const freshLocation =
+            await getFreshGpsLocation();
 
-          const cityName =
-            liveCity?.[0]?.city ||
-            liveCity?.[0]?.subregion ||
-            liveCity?.[0]?.region ||
-            userData?.location ||
-            "Location unavailable";
+          if (!freshLocation) return;
 
-          await updateDoc(doc(db, "users", user.uid), {
-            latitude: freshLocation.latitude,
-            longitude: freshLocation.longitude,
-            location: cityName,
-            locationUpdatedAt: serverTimestamp(),
-          });
-        } catch (e) {
-          console.error("Background location refresh failed:", e);
-        }
-      };
+          try {
+            const liveCity =
+              await Location.reverseGeocodeAsync({
+                latitude:
+                  freshLocation.latitude,
+                longitude:
+                  freshLocation.longitude,
+              });
+
+            const cityName =
+              liveCity?.[0]?.city ||
+              liveCity?.[0]?.subregion ||
+              liveCity?.[0]?.region ||
+              userData?.location ||
+              "Location unavailable";
+
+            await updateDoc(
+              doc(db, "users", user.uid),
+              {
+                latitude:
+                  freshLocation.latitude,
+                longitude:
+                  freshLocation.longitude,
+                location: cityName,
+                locationUpdatedAt:
+                  serverTimestamp(),
+              },
+            );
+          } catch (e) {
+            console.error(
+              "Background location refresh failed:",
+              e,
+            );
+          }
+        };
 
       refreshLocationInBackground();
-    }, [availableToDonate])
+    }, [availableToDonate]),
   );
 
-  const handleUpdateProfile = async () => {
-    // Pakistani phone regex
-    const pakPhoneRegex = /^(?:\+92|0)3\d{9}$/;
-    const nameRegex = /^[a-zA-Z ]{2,50}$/;
-    const locationRegex = /^[a-zA-Z\s,.-]{2,100}$/;
+  /* =======================================================
+     OPEN EDIT PROFILE
+  ======================================================= */
 
-    if (!editName.trim() || !editPhone.trim() || !editLocation.trim()) {
-      Alert.alert("Error", "Please fill all fields correctly.");
+  const openEditModal = () => {
+    setEditName(
+      userData?.fullName || "",
+    );
+
+    setEditPhone(
+      userData?.phoneNumber || "",
+    );
+
+    setEditLocation(
+      userData?.location || "",
+    );
+
+    setEditBloodType(
+      userData?.bloodType || "O+",
+    );
+
+    setIsEditModalVisible(true);
+  };
+
+  /* =======================================================
+     UPDATE PROFILE
+  ======================================================= */
+
+  const handleUpdateProfile = async () => {
+    const pakPhoneRegex =
+      /^(?:\+92|0)3\d{9}$/;
+
+    const nameRegex =
+      /^[a-zA-Z ]{2,50}$/;
+
+    const locationRegex =
+      /^[a-zA-Z\s,.-]{2,100}$/;
+
+    if (
+      !editName.trim() ||
+      !editPhone.trim() ||
+      !editLocation.trim()
+    ) {
+      Alert.alert(
+        "Error",
+        "Please fill all fields correctly.",
+      );
+
       return;
     }
 
-    if (!locationRegex.test(editLocation) || editLocation.length > 100) {
-      alert(
+    if (
+      !locationRegex.test(editLocation) ||
+      editLocation.length > 100
+    ) {
+      Alert.alert(
+        "Invalid Location",
         "Please enter a valid location with only alphabets and spaces and length must be less than 100",
       );
+
       return;
     }
 
-    if (!nameRegex.test(editName) || editName.length > 50) {
-      alert(
+    if (
+      !nameRegex.test(editName) ||
+      editName.length > 50
+    ) {
+      Alert.alert(
+        "Invalid Name",
         "Please enter a valid name with only alphabets and spaces and length must be less than 50",
       );
+
       return;
     }
+
     if (!pakPhoneRegex.test(editPhone)) {
       Alert.alert(
         "Invalid Phone",
         "Enter valid Pakistani phone number (e.g. +923XXXXXXXXX or 03XXXXXXXXX)",
       );
+
       return;
     }
 
     setIsUpdating(true);
+
     try {
       const user = auth.currentUser;
-      if (user) {
-        const userRef = doc(db, "users", user.uid);
 
-        let newLocation = editLocation.trim();
-        let lat = userData?.latitude ?? null;
-        let lng = userData?.longitude ?? null;
+      if (user) {
+        const userRef = doc(
+          db,
+          "users",
+          user.uid,
+        );
+
+        let newLocation =
+          editLocation.trim();
+
+        let lat =
+          userData?.latitude ?? null;
+
+        let lng =
+          userData?.longitude ?? null;
 
         try {
-          const freshLocation = await getFreshGpsLocation();
+          const freshLocation =
+            await getFreshGpsLocation();
 
           if (freshLocation) {
-            lat = freshLocation.latitude;
-            lng = freshLocation.longitude;
+            lat =
+              freshLocation.latitude;
 
-            const geoResult = await Location.reverseGeocodeAsync({
-              latitude: freshLocation.latitude,
-              longitude: freshLocation.longitude,
-            });
+            lng =
+              freshLocation.longitude;
+
+            const geoResult =
+              await Location.reverseGeocodeAsync(
+                {
+                  latitude:
+                    freshLocation.latitude,
+                  longitude:
+                    freshLocation.longitude,
+                },
+              );
 
             const cityName =
               geoResult?.[0]?.city ||
@@ -216,87 +435,117 @@ const Profile = () => {
               geoResult?.[0]?.region ||
               newLocation;
 
-            newLocation = cityName || newLocation;
+            newLocation =
+              cityName || newLocation;
           }
         } catch (error) {
-          console.log("GPS refresh during profile update failed:", error);
+          console.log(
+            "GPS refresh during profile update failed:",
+            error,
+          );
 
           if (newLocation) {
             try {
-              const geocodedLocation = await Location.geocodeAsync(newLocation);
-              const matchedLocation = geocodedLocation?.[0];
+              const geocodedLocation =
+                await Location.geocodeAsync(
+                  newLocation,
+                );
+
+              const matchedLocation =
+                geocodedLocation?.[0];
 
               if (matchedLocation) {
-                lat = matchedLocation.latitude;
-                lng = matchedLocation.longitude;
+                lat =
+                  matchedLocation.latitude;
+
+                lng =
+                  matchedLocation.longitude;
               }
             } catch (geoError) {
-              console.log("Manual profile location geocoding failed:", geoError);
+              console.log(
+                "Manual profile location geocoding failed:",
+                geoError,
+              );
             }
           }
         }
 
-        await updateDoc(userRef, {
-          fullName: editName,
-          phoneNumber: editPhone,
-          location: newLocation,
-          latitude: lat,
-          longitude: lng,
-          bloodType: editBloodType,
-        });
+        await updateDoc(
+          userRef,
+          {
+            fullName: editName,
+            phoneNumber: editPhone,
+            location: newLocation,
+            latitude: lat,
+            longitude: lng,
+            bloodType: editBloodType,
+          },
+        );
 
         setUser({
           ...userData,
           fullName: editName,
           phoneNumber: editPhone,
           location: newLocation,
-          latitude: lat ?? undefined,
-          longitude: lng ?? undefined,
+          latitude:
+            lat ?? undefined,
+          longitude:
+            lng ?? undefined,
           bloodType: editBloodType,
         } as any);
 
-        Alert.alert("Success", "Profile updated successfully!");
+        Alert.alert(
+          "Success",
+          "Profile updated successfully!",
+        );
+
         setIsEditModalVisible(false);
       }
     } catch (error) {
-      console.error("Update error:", error);
-      Alert.alert("Error", "Failed to update profile.");
+      console.error(
+        "Update error:",
+        error,
+      );
+
+      Alert.alert(
+        "Error",
+        "Failed to update profile.",
+      );
     } finally {
       setIsUpdating(false);
     }
   };
 
-  const openEditModal = () => {
-    setEditName(userData?.fullName || "");
-    setEditPhone(userData?.phoneNumber || "");
-    setEditLocation(userData?.location || "");
-    setEditBloodType(userData?.bloodType || "O+");
-    setIsEditModalVisible(true);
-  };
-
-  if (loading) {
-    return (
-      <View className="flex-1 items-center justify-center bg-white">
-        <ActivityIndicator size="large" color="#DC2626" />
-      </View>
-    );
-  }
+  /* =======================================================
+     LOGOUT
+  ======================================================= */
 
   const handleLogout = () => {
     Alert.alert(
       "Logout",
       "Are you sure you want to logout from your account?",
       [
-        { text: "Cancel", style: "cancel" },
+        {
+          text: "Cancel",
+          style: "cancel",
+        },
         {
           text: "Logout",
           style: "destructive",
+
           onPress: async () => {
             try {
               await signOut(auth);
             } catch (error) {
-              console.error("Logout error:", error);
-              Alert.alert("Error", "Failed to log out. Please try again.");
+              console.error(
+                "Logout error:",
+                error,
+              );
+
+              Alert.alert(
+                "Error",
+                "Failed to log out. Please try again.",
+              );
             }
           },
         },
@@ -304,327 +553,674 @@ const Profile = () => {
     );
   };
 
+  /* =======================================================
+     LOADING
+  ======================================================= */
+
+  if (loading) {
+    return (
+      <View className="flex-1 items-center justify-center bg-white">
+        <ActivityIndicator
+          size="large"
+          color="#DC2626"
+        />
+      </View>
+    );
+  }
+
+  /* =======================================================
+     UI
+  ======================================================= */
+
   return (
-    <SafeAreaView className="flex-1 bg-slate-50" edges={["top"]}>
+    <SafeAreaView
+      className="flex-1 bg-slate-50"
+      edges={["top"]}
+    >
       <StatusBar barStyle="dark-content" />
+
       <ScrollView
         showsVerticalScrollIndicator={false}
         className="flex-1"
-        contentContainerStyle={{ paddingBottom: Math.max(insets.bottom + 105, 125) }}
+        contentContainerStyle={{
+          paddingBottom: Math.max(
+            insets.bottom + 105,
+            125,
+          ),
+        }}
         keyboardShouldPersistTaps="handled"
       >
-        {/* Profile Card Section */}
-        <View className="items-center px-6 pb-4 pt-6">
-          <View className="relative">
-            <View className="h-[104px] w-[104px] items-center justify-center overflow-hidden rounded-full border-4 border-white bg-slate-100 shadow-sm">
-              <Avatar
-                name={userData?.fullName}
-                photoUrl={userData?.avatarUrl}
-                size={104}
-                shape="circle"
-              />
+        {/* =================================================
+            PROFILE HEADER
+        ================================================= */}
+
+        <View className="px-5 pb-3 pt-4">
+
+          <View className="flex-row items-center">
+
+            {/* Avatar */}
+
+            <View className="relative">
+              <View className="h-[92px] w-[92px] items-center justify-center overflow-hidden rounded-full bg-slate-100">
+                <Avatar
+                  name={userData?.fullName}
+                  photoUrl={userData?.avatarUrl}
+                  size={92}
+                  shape="circle"
+                />
+              </View>
+
+              {/* Blood Badge */}
+
+              <View className="absolute -bottom-1 -right-1 h-9 min-w-9 items-center justify-center rounded-full border-[3px] border-slate-50 bg-red-600 px-1">
+                <Text className="text-[10px] font-black text-white">
+                  {userData?.bloodType ||
+                    "O+"}
+                </Text>
+              </View>
             </View>
-            {/* Blood Type Badge */}
-            <View className="absolute -bottom-1 -right-1 h-9 w-9 items-center justify-center rounded-full border-2 border-white bg-red-600 shadow-sm">
-              <Text className="text-xs font-black text-white">
-                {userData?.bloodType || "O+"}
+
+            {/* User Details */}
+
+            <View className="ml-5 flex-1">
+
+              <View className="flex-row items-center">
+                <Text
+                  numberOfLines={1}
+                  className="flex-1 text-[22px] font-black text-slate-900"
+                >
+                  {userData?.fullName ||
+                    "Donor User"}
+                </Text>
+
+                <TouchableOpacity
+                  onPress={openEditModal}
+                  activeOpacity={0.7}
+                  className="ml-2 h-9 w-9 items-center justify-center"
+                >
+                  <Ionicons
+                    name="create-outline"
+                    size={21}
+                    color="#E11D48"
+                  />
+                </TouchableOpacity>
+              </View>
+
+              {/* Location */}
+
+              <View className="mt-1 flex-row items-center">
+                <Ionicons
+                  name="location-outline"
+                  size={15}
+                  color="#64748B"
+                />
+
+                <Text
+                  numberOfLines={1}
+                  className="ml-1 flex-1 text-[12px] font-medium text-slate-500"
+                >
+                  {userData?.location ||
+                    "Location not set"}
+                </Text>
+              </View>
+
+              {/* Ready Status */}
+
+              <View className="mt-3 flex-row items-center">
+                <View
+                  className={`h-2 w-2 rounded-full ${
+                    availableToDonate
+                      ? "bg-red-500"
+                      : "bg-slate-400"
+                  }`}
+                />
+
+                <Text
+                  className={`ml-2 text-[11px] font-extrabold ${
+                    availableToDonate
+                      ? "text-red-600"
+                      : "text-slate-400"
+                  }`}
+                >
+                  {availableToDonate
+                    ? "Ready to Donate"
+                    : "Not Available"}
+                </Text>
+              </View>
+            </View>
+          </View>
+
+          {/* =================================================
+              PROFILE STATS
+          ================================================= */}
+
+          <View className="mt-6 flex-row items-center justify-around">
+
+            {/* Blood Type */}
+
+            <View className="flex-1 items-center">
+              <Ionicons
+                name="water"
+                size={22}
+                color="#E11D48"
+              />
+
+              <Text className="mt-1 text-[14px] font-black text-slate-900">
+                {userData?.bloodType ||
+                  "O+"}
+              </Text>
+
+              <Text className="text-[10px] font-medium text-slate-400">
+                Blood Type
+              </Text>
+            </View>
+
+            {/* Ready */}
+
+            <View className="flex-1 items-center">
+              <Ionicons
+                name="heart"
+                size={22}
+                color="#E11D48"
+              />
+
+              <Text className="mt-1 text-[14px] font-black text-slate-900">
+                {availableToDonate
+                  ? "Ready"
+                  : "Off"}
+              </Text>
+
+              <Text className="text-[10px] font-medium text-slate-400">
+                To Donate
+              </Text>
+            </View>
+
+            {/* Account */}
+
+            <View className="flex-1 items-center">
+              <Ionicons
+                name="shield-checkmark"
+                size={22}
+                color="#E11D48"
+              />
+
+              <Text className="mt-1 text-[14px] font-black text-slate-900">
+                {userData?.isActive ===
+                false
+                  ? "Inactive"
+                  : "Active"}
+              </Text>
+
+              <Text className="text-[10px] font-medium text-slate-400">
+                Account
               </Text>
             </View>
           </View>
-
-            <Text className="mt-3 text-[24px] font-bold text-slate-900">
-            {userData?.fullName || "Donor User"}
-          </Text>
-          <View className="flex-row items-center mt-1">
-            <Ionicons name="location-outline" size={14} color="#64748B" />
-            <Text className="ml-1 text-sm font-medium text-slate-500">
-              {userData?.location || "Location not set"}
-            </Text>
-          </View>
         </View>
 
-        {/* Settings Section */}
+        {/* =================================================
+            ACCOUNT SETTINGS
+        ================================================= */}
+
         <SectionHeader title="Account Settings" />
+
         <MenuSwitch
           icon="notifications-outline"
           title="Notifications"
+          subtitle="Receive updates and important alerts"
           value={notificationsEnabled}
-          onValueChange={setNotificationsEnabled}
+          onValueChange={
+            setNotificationsEnabled
+          }
         />
+
         <MenuSwitch
           icon="heart-outline"
           title="Available to Donate"
+          subtitle="Show your availability to people nearby"
           value={availableToDonate}
-          onValueChange={async (value: boolean) => {
-            // Ignore a second tap while a request is already running,
-            // so we never fire two updates on top of each other.
-            if (updatingAvailability) return;
+          disabled={updatingAvailability}
+          onValueChange={async (
+            value: boolean,
+          ) => {
+            if (updatingAvailability)
+              return;
 
-            const previousValue = availableToDonate;
+            const previousValue =
+              availableToDonate;
 
-            // Optimistic UI update — switch flips instantly,
-            // we correct it below only if something goes wrong.
             setAvailableToDonate(value);
-            setUpdatingAvailability(true);
+
+            setUpdatingAvailability(
+              true,
+            );
 
             try {
-              const user = auth.currentUser;
-              if (!user) return;
+              const user =
+                auth.currentUser;
+
+              if (!user) {
+                setAvailableToDonate(
+                  previousValue,
+                );
+
+                return;
+              }
+
+              /* Availability ON */
 
               if (value) {
-                // Donor just turned availability ON — capture a
-                // fresh GPS fix so "Find Nearby Donors" distances
-                // (shown to reporters) reflect where they are RIGHT NOW,
-                // not wherever they last happened to open the app.
-                const freshLocation = await getFreshGpsLocation();
+                const freshLocation =
+                  await getFreshGpsLocation();
 
                 if (freshLocation) {
-                  await updateDoc(doc(db, "users", user.uid), {
-                    availableToDonate: true,
-                    latitude: freshLocation.latitude,
-                    longitude: freshLocation.longitude,
-                    locationUpdatedAt: serverTimestamp(),
-                  });
+                  await updateDoc(
+                    doc(
+                      db,
+                      "users",
+                      user.uid,
+                    ),
+                    {
+                      availableToDonate:
+                        true,
+
+                      latitude:
+                        freshLocation.latitude,
+
+                      longitude:
+                        freshLocation.longitude,
+
+                      locationUpdatedAt:
+                        serverTimestamp(),
+                    },
+                  );
 
                   setUser({
                     ...userData,
-                    availableToDonate: true,
-                    latitude: freshLocation.latitude,
-                    longitude: freshLocation.longitude,
+
+                    availableToDonate:
+                      true,
+
+                    latitude:
+                      freshLocation.latitude,
+
+                    longitude:
+                      freshLocation.longitude,
                   } as any);
                 } else {
-                  // GPS unavailable (permission denied / signal issue).
-                  // Don't block the donor from going available — just
-                  // let them know distance may be based on an older location.
                   Alert.alert(
                     "Location Not Updated",
-                    "We couldn't get your current location, so the distance shown to nearby requests may not be accurate. You're still marked as available."
+                    "We couldn't get your current location, so the distance shown to nearby requests may not be accurate. You're still marked as available.",
                   );
 
-                  await updateDoc(doc(db, "users", user.uid), {
-                    availableToDonate: true,
-                  });
+                  await updateDoc(
+                    doc(
+                      db,
+                      "users",
+                      user.uid,
+                    ),
+                    {
+                      availableToDonate:
+                        true,
+                    },
+                  );
 
-                  setUser({ ...userData, availableToDonate: true } as any);
+                  setUser({
+                    ...userData,
+                    availableToDonate:
+                      true,
+                  } as any);
                 }
-              } else {
-                // Turning availability OFF doesn't need a location update.
-                await updateDoc(doc(db, "users", user.uid), {
-                  availableToDonate: false,
-                });
+              }
 
-                setUser({ ...userData, availableToDonate: false } as any);
+              /* Availability OFF */
+
+              else {
+                await updateDoc(
+                  doc(
+                    db,
+                    "users",
+                    user.uid,
+                  ),
+                  {
+                    availableToDonate:
+                      false,
+                  },
+                );
+
+                setUser({
+                  ...userData,
+                  availableToDonate:
+                    false,
+                } as any);
               }
             } catch (e) {
-              console.error("Toggle error:", e);
-              // Revert the switch since the update failed.
-              setAvailableToDonate(previousValue);
+              console.error(
+                "Toggle error:",
+                e,
+              );
+
+              setAvailableToDonate(
+                previousValue,
+              );
+
               Alert.alert(
                 "Error",
-                "Could not update your availability. Please try again."
+                "Could not update your availability. Please try again.",
               );
             } finally {
-              setUpdatingAvailability(false);
+              setUpdatingAvailability(
+                false,
+              );
             }
           }}
         />
+
         <MenuItem
           icon="create-outline"
           title="Edit Profile Information"
-          subtitle="Change your name, phone, etc."
+          subtitle="Change your name, phone, location and blood group"
           onPress={openEditModal}
         />
 
-        {/* Information Section */}
+        {/* =================================================
+            APP INFORMATION
+        ================================================= */}
+
         <SectionHeader title="App Information" />
+
         <MenuItem
           icon="information-circle-outline"
           title="About App"
-          onPress={() => router.push("/(tabs)/profile/aboutapp")}
+          subtitle="Learn more about BloodCare"
+          onPress={() =>
+            router.push(
+              "/(tabs)/profile/aboutapp",
+            )
+          }
         />
+
         <MenuItem
           icon="shield-checkmark-outline"
           title="Privacy Policy"
-          onPress={() => router.push("/(tabs)/profile/privacypolicy")}
+          subtitle="Read our privacy policy"
+          onPress={() =>
+            router.push(
+              "/(tabs)/profile/privacypolicy",
+            )
+          }
         />
-        <View className="mx-4 mb-2 flex-row items-center justify-between rounded-2xl border border-gray-100 bg-white px-4 py-3.5">
-          <View className="flex-row items-center">
-            <View className="h-10 w-10 items-center justify-center rounded-xl bg-white shadow-sm">
-              <Ionicons name="git-branch-outline" size={22} color="#DC2626" />
-            </View>
-            <Text className="ml-4 text-base font-bold text-gray-900">
-              Version Info
-            </Text>
-          </View>
-          <Text className="rounded-full bg-red-50 px-3 py-1 text-sm font-bold text-red-600">
-            1.0.0
-          </Text>
-        </View>
 
-        {/* Logout Section */}
+        <MenuItem
+          icon="git-branch-outline"
+          title="Version Info"
+          subtitle="Current app version"
+          rightText="1.0.0"
+        />
+
+        {/* =================================================
+            LOGOUT
+        ================================================= */}
+
         <SectionHeader title="Actions" />
+
         <TouchableOpacity
           onPress={handleLogout}
-          className="mx-4 mb-2 flex-row items-center rounded-2xl border border-red-100 bg-red-50/70 px-4 py-3.5"
+          activeOpacity={0.8}
+          className="mx-4 mb-2 flex-row items-center rounded-2xl border border-red-100 bg-red-50 px-4 py-3"
         >
-          <View className="h-10 w-10 items-center justify-center rounded-xl bg-white shadow-sm">
-            <Ionicons name="log-out-outline" size={22} color="#DC2626" />
+          <View className="h-9 w-9 items-center justify-center">
+            <Ionicons
+              name="log-out-outline"
+              size={21}
+              color="#DC2626"
+            />
           </View>
-          <Text className="ml-4 text-base font-bold text-red-600">
-            Logout
-          </Text>
+
+          <View className="ml-3 flex-1">
+            <Text className="text-[15px] font-extrabold text-red-600">
+              Logout
+            </Text>
+
+            <Text className="mt-0.5 text-[11px] font-medium text-red-400">
+              Sign out from your account
+            </Text>
+          </View>
+
+          <Ionicons
+            name="chevron-forward"
+            size={18}
+            color="#FCA5A5"
+          />
         </TouchableOpacity>
       </ScrollView>
 
-      {/* Edit Profile Modal */}
+      {/* =================================================
+          EDIT PROFILE MODAL
+      ================================================= */}
+
       <Modal
         visible={isEditModalVisible}
         animationType="fade"
         transparent={true}
-        onRequestClose={() => setIsEditModalVisible(false)}
+        onRequestClose={() =>
+          setIsEditModalVisible(false)
+        }
       >
         <View className="flex-1">
-          {/* Transparent Backdrop - Tap to Close */}
+
+          {/* Backdrop */}
+
           <TouchableOpacity
             activeOpacity={1}
-            onPress={() => setIsEditModalVisible(false)}
+            onPress={() =>
+              setIsEditModalVisible(false)
+            }
             className="absolute inset-0 bg-black/40"
           />
 
           <View className="flex-1 justify-end">
             <KeyboardAvoidingView
-              behavior={Platform.OS === "ios" ? "padding" : undefined}
+              behavior={
+                Platform.OS === "ios"
+                  ? "padding"
+                  : undefined
+              }
               className="w-full"
             >
               <View className="rounded-t-[32px] bg-white px-6 pb-4 pt-3 shadow-2xl">
-                {/* Drag Handle Indicator */}
-                <View className="h-1.5 w-12 bg-gray-200 self-center rounded-full mb-6" />
 
-                {/* Modal Header */}
-                <View className="flex-row items-center justify-between mb-4 px-1">
+                {/* Drag Handle */}
+
+                <View className="mb-6 h-1.5 w-12 self-center rounded-full bg-gray-200" />
+
+                {/* Header */}
+
+                <View className="mb-4 flex-row items-center justify-between px-1">
                   <View>
                     <Text className="text-2xl font-black text-gray-900">
                       Edit Profile
                     </Text>
-                    <Text className="text-xs font-bold text-gray-400 mt-1 uppercase tracking-widest">
+
+                    <Text className="mt-1 text-xs font-bold uppercase tracking-widest text-gray-400">
                       Personal Details
                     </Text>
                   </View>
+
                   <TouchableOpacity
-                    onPress={() => setIsEditModalVisible(false)}
+                    onPress={() =>
+                      setIsEditModalVisible(
+                        false,
+                      )
+                    }
                     className="h-10 w-10 items-center justify-center rounded-full border border-gray-100 bg-gray-50"
                   >
-                    <Ionicons name="close" size={20} color="#6B7280" />
+                    <Ionicons
+                      name="close"
+                      size={20}
+                      color="#6B7280"
+                    />
                   </TouchableOpacity>
                 </View>
 
                 <ScrollView
-                  showsVerticalScrollIndicator={false}
+                  showsVerticalScrollIndicator={
+                    false
+                  }
                   className="max-h-[60vh]"
                   keyboardShouldPersistTaps="handled"
                 >
-                  {/* Name Input */}
+
+                  {/* FULL NAME */}
+
                   <View className="mb-5">
                     <Text className="mb-2.5 ml-1 text-[10px] font-black uppercase tracking-[2px] text-gray-400">
                       Full Name
                     </Text>
-                    <View className="flex-row items-center rounded-2xl bg-gray-50 px-4  border border-gray-100">
+
+                    <View className="flex-row items-center rounded-2xl border border-gray-100 bg-gray-50 px-4">
                       <Ionicons
                         name="person-outline"
                         size={18}
                         color="#DC2626"
                       />
+
                       <TextInput
-                        className="ml-3 flex-1 text-base font-bold text-gray-900"
+                        className="ml-3 flex-1 py-4 text-base font-bold text-gray-900"
                         placeholder="Full Name"
                         placeholderTextColor="#9CA3AF"
                         value={editName}
-                        onChangeText={setEditName}
+                        onChangeText={
+                          setEditName
+                        }
                       />
                     </View>
                   </View>
 
-                  {/* Phone Input */}
+                  {/* PHONE */}
+
                   <View className="mb-5">
                     <Text className="mb-2.5 ml-1 text-[10px] font-black uppercase tracking-[2px] text-gray-400">
                       Phone Number
                     </Text>
-                    <View className="flex-row items-center rounded-2xl bg-gray-50 px-4  border border-gray-100">
-                      <Ionicons name="call-outline" size={18} color="#DC2626" />
+
+                    <View className="flex-row items-center rounded-2xl border border-gray-100 bg-gray-50 px-4">
+                      <Ionicons
+                        name="call-outline"
+                        size={18}
+                        color="#DC2626"
+                      />
+
                       <TextInput
-                        className="ml-3 flex-1 text-base font-bold text-gray-900"
+                        className="ml-3 flex-1 py-4 text-base font-bold text-gray-900"
                         placeholder="Phone Number"
                         placeholderTextColor="#9CA3AF"
                         keyboardType="phone-pad"
                         value={editPhone}
-                        onChangeText={setEditPhone}
+                        onChangeText={
+                          setEditPhone
+                        }
                       />
                     </View>
                   </View>
 
-                  {/* Location Input */}
+                  {/* LOCATION */}
+
                   <View className="mb-6">
                     <Text className="mb-2.5 ml-1 text-[10px] font-black uppercase tracking-[2px] text-gray-400">
                       Primary Location
                     </Text>
-                    <View className="flex-row items-center rounded-2xl bg-gray-50 px-4  border border-gray-100">
+
+                    <View className="flex-row items-center rounded-2xl border border-gray-100 bg-gray-50 px-4">
                       <Ionicons
                         name="location-outline"
                         size={18}
                         color="#DC2626"
                       />
+
                       <TextInput
-                        className="ml-3 flex-1 text-base font-bold text-gray-900"
+                        className="ml-3 flex-1 py-4 text-base font-bold text-gray-900"
                         placeholder="e.g. Bannu, Pakistan"
                         placeholderTextColor="#9CA3AF"
                         value={editLocation}
-                        onChangeText={setEditLocation}
+                        onChangeText={
+                          setEditLocation
+                        }
                       />
                     </View>
                   </View>
 
-                  {/* Blood Type Picker */}
+                  {/* BLOOD TYPE */}
+
                   <Text className="mb-4 ml-1 text-[10px] font-black uppercase tracking-[2px] text-gray-400">
                     Your Blood Group
                   </Text>
-                  <View className="flex-row flex-wrap justify-between gap-y-3 mb-10">
-                    {bloodTypes.map((type) => (
-                      <TouchableOpacity
-                        key={type}
-                        onPress={() => setEditBloodType(type)}
-                        className={`h-12 w-[23%] items-center justify-center rounded-2xl border ${
-                          editBloodType === type
-                            ? "border-red-600 bg-red-50"
-                            : "border-gray-50 bg-gray-50"
-                        }`}
-                      >
-                        <Text
-                          className={`text-sm font-black ${
-                            editBloodType === type
-                              ? "text-red-600"
-                              : "text-gray-500"
+
+                  <View className="mb-10 flex-row flex-wrap justify-between gap-y-3">
+                    {bloodTypes.map(
+                      (type) => (
+                        <TouchableOpacity
+                          key={type}
+                          onPress={() =>
+                            setEditBloodType(
+                              type,
+                            )
+                          }
+                          className={`h-12 w-[23%] items-center justify-center rounded-2xl border ${
+                            editBloodType ===
+                            type
+                              ? "border-red-600 bg-red-50"
+                              : "border-gray-100 bg-gray-50"
                           }`}
                         >
-                          {type}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
+                          <Text
+                            className={`text-sm font-black ${
+                              editBloodType ===
+                              type
+                                ? "text-red-600"
+                                : "text-gray-500"
+                            }`}
+                          >
+                            {type}
+                          </Text>
+                        </TouchableOpacity>
+                      ),
+                    )}
                   </View>
 
-                  {/* Save Button */}
+                  {/* UPDATE BUTTON */}
+
                   <TouchableOpacity
-                    onPress={handleUpdateProfile}
+                    onPress={
+                      handleUpdateProfile
+                    }
                     disabled={isUpdating}
                     activeOpacity={0.9}
-                    className={`rounded-2xl bg-red-600 shadow-xl shadow-red-200 mb-6 ${
-                      isUpdating ? "opacity-70" : ""
+                    className={`mb-6 rounded-2xl bg-red-600 ${
+                      isUpdating
+                        ? "opacity-70"
+                        : ""
                     }`}
+                    style={{
+                      shadowColor:
+                        "#DC2626",
+                      shadowOffset: {
+                        width: 0,
+                        height: 5,
+                      },
+                      shadowOpacity: 0.2,
+                      shadowRadius: 8,
+                      elevation: 5,
+                    }}
                   >
-                    <View className="items-center py-5">
+                    <View className="items-center py-4">
                       {isUpdating ? (
-                        <ActivityIndicator color="white" size="small" />
+                        <ActivityIndicator
+                          color="white"
+                          size="small"
+                        />
                       ) : (
-                        <Text className="text-lg font-black text-white uppercase tracking-widest">
+                        <Text className="text-[15px] font-black uppercase tracking-widest text-white">
                           Update Profile
                         </Text>
                       )}

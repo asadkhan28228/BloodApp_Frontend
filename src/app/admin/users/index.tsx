@@ -49,7 +49,7 @@ const ManageUsers = () => {
 
       const userList: AppUser[] = [];
 
-      snapshot.forEach((userDoc) => {
+      snapshot.forEach((userDoc : any) => {
         const data = userDoc.data();
 
         // Full admins ko users list mein show nahi karna.
