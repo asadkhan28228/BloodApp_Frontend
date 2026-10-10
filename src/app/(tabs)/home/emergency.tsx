@@ -47,6 +47,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 
 import { useUserStore } from "../../../store/userStore";
 import { apiRequest } from "../../../lib/api";
+import { startEmergencyLocationSharing, stopEmergencyLocationSharing } from "../../../services/emergencyLocationSharing";
 
 
 
@@ -1096,6 +1097,21 @@ const Emergency = () => {
         )
       );
 
+      if (newStatus === "On The Way") {
+        // Explicit journey action: ask for foreground GPS permission and begin updates.
+        try {
+          const started = await startEmergencyLocationSharing(String(currentResponse.id));
+          if (!started) {
+            Alert.alert("Location permission", "Journey status was saved, but live GPS sharing is off. Enable location permission and start sharing from Emergency Insights.");
+          }
+        } catch (trackingError) {
+          console.warn("Unable to start live location sharing", trackingError);
+          Alert.alert("Location sharing", "Journey status was saved, but GPS sharing could not start. You can retry from Emergency Insights.");
+        }
+      } else if (newStatus === "Arrived" || newStatus === "Completed") {
+        stopEmergencyLocationSharing();
+      }
+
       if (newStatus === "Arrived") {
         Alert.alert("You've Arrived 📍", "The emergency reporter has been notified that you've arrived.");
       } else if (newStatus === "On The Way") {
@@ -1773,6 +1789,13 @@ const Emergency = () => {
         paddingBottom: 40,
       }}
     >
+      <TouchableOpacity
+        onPress={() => router.push('/emergency-insights' as any)}
+        className="mb-4 rounded-2xl bg-red-700 p-4"
+      >
+        <Text className="text-center font-bold text-white">Emergency Insights / Nearby Donors</Text>
+        <Text className="mt-1 text-center text-xs text-white">Open from an emergency to load its ID</Text>
+      </TouchableOpacity>
       {/* QUICK EMERGENCY REPORT */}
      <View className="bg-slate-50 pb-4">
         <View className="mb-3 flex-row items-center">
@@ -2400,6 +2423,20 @@ const Emergency = () => {
                                       </Text>
                                     </View>
                                   </View>
+
+                                  {myResponse.id && currentStatus !== "Completed" && (
+                                    <TouchableOpacity
+                                      activeOpacity={0.85}
+                                      onPress={() => router.push({
+                                        pathname: "/emergency-insights",
+                                        params: { emergencyId: String(emergencyId), responseId: String(myResponse.id) },
+                                      } as any)}
+                                      className="mb-3 flex-row items-center justify-center rounded-xl border border-blue-200 bg-white py-3"
+                                    >
+                                      <Ionicons name="navigate-outline" size={17} color="#2563EB" />
+                                      <Text className="ml-2 text-xs font-bold text-blue-700">Live Location & ETA</Text>
+                                    </TouchableOpacity>
+                                  )}
 
                                   {currentStatus === "Accepted" && (
                                     <TouchableOpacity
