@@ -327,12 +327,7 @@ const Home = () => {
               numberOfLines={1}
               className="text-3xl font-black tracking-tight text-gray-900"
             >
-              Hello,{" "}
-              {(
-                userData?.fullName ||
-                "Guest"
-              ).split(" ")[0]}
-              👋
+               {userData?.fullName?.trim() || "Guest"} 👋
             </Text>
 
             <Text className="mt-0.5 text-sm font-medium text-gray-400">

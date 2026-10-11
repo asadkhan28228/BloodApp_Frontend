@@ -1,3 +1,4 @@
+
 import { create } from "zustand";
 import { doc, getDoc } from "@/src/lib/backendCompat";
 import { db } from "../config/backendConfig";
@@ -7,7 +8,11 @@ export type UserRole = "user" | "admin" | "bloodBankAdmin";
 export const isAdminRole = (role?: UserRole) =>
   role === "admin" || role === "bloodBankAdmin";
 
-interface UserProfile {
+export interface UserProfile {
+  // User ID from backend
+  id?: string;
+  uid?: string;
+
   fullName: string;
   email: string;
   phoneNumber: string;
@@ -15,7 +20,7 @@ interface UserProfile {
 
   location?: string;
 
-  // GPS location for nearby donor distance
+  // GPS location
   latitude?: number;
   longitude?: number;
 
@@ -27,10 +32,14 @@ interface UserProfile {
 
   // Admin system
   role?: UserRole;
-  
 
   // Account status
   isActive?: boolean;
+
+  // Optional profile fields
+  donationsCount?: number;
+  livesSaved?: number;
+  pushToken?: string;
 }
 
 interface UserState {
@@ -38,78 +47,87 @@ interface UserState {
 
   loading: boolean;
 
-  setUser: (
-    user: UserProfile | null
-  ) => void;
+  setUser: (user: UserProfile | null) => void;
 
-  fetchUser: (
-    uid: string
-  ) => Promise<void>;
+  fetchUser: (uid: string) => Promise<void>;
 
   clearUser: () => void;
 }
 
-export const useUserStore =
-  create<UserState>((set) => ({
-    user: null,
+export const useUserStore = create<UserState>((set) => ({
+  user: null,
 
-    loading: false,
+  loading: false,
 
-    setUser: (user) =>
-      set({
-        user,
-      }),
+  // ==========================================
+  // SET USER
+  // ==========================================
 
-    fetchUser: async (uid) => {
-      set({
-        loading: true,
-      });
+  setUser: (user) => {
+    set({
+      user: user
+        ? {
+            ...user,
+            id: user.id ?? user.uid,
+          }
+        : null,
+    });
+  },
 
-      try {
-        const userDoc =
-          await getDoc(
-            doc(
-              db,
-              "users",
-              uid
-            )
-          );
+  // ==========================================
+  // FETCH USER
+  // ==========================================
 
-        if (userDoc.exists()) {
-          const userData =
-            userDoc.data() as UserProfile;
+  fetchUser: async (uid) => {
+    set({
+      loading: true,
+    });
 
-          set({
-            user: userData,
-          });
-        } else {
-          console.log(
-            "User document not found"
-          );
+    try {
+      const userDoc = await getDoc(
+        doc(db, "users", uid)
+      );
 
-          set({
-            user: null,
-          });
-        }
-      } catch (error) {
-        console.error(
-          "Error fetching user in store:",
-          error
-        );
+      if (userDoc.exists()) {
+        const userData = userDoc.data() as UserProfile;
+
+        set({
+          user: {
+            ...userData,
+            id: userData.id ?? userData.uid ?? uid,
+          },
+        });
+      } else {
+        console.log("User document not found");
 
         set({
           user: null,
         });
-      } finally {
-        set({
-          loading: false,
-        });
       }
-    },
+    } catch (error) {
+      console.error(
+        "Error fetching user in store:",
+        error
+      );
 
-    clearUser: () => {
       set({
         user: null,
       });
-    },
-  }));
+    } finally {
+      set({
+        loading: false,
+      });
+    }
+  },
+
+  // ==========================================
+  // CLEAR USER
+  // ==========================================
+
+  clearUser: () => {
+    set({
+      user: null,
+      loading: false,
+    });
+  },
+}));

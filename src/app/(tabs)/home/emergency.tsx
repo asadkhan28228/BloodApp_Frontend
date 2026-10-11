@@ -2,6 +2,7 @@ import React, {
   useState,
   useEffect,
   useCallback,
+  useRef,
 } from "react";
 
 import {
@@ -46,7 +47,8 @@ import Donorcard from "@/src/components/donorcard";
 import { useLocalSearchParams, useRouter } from "expo-router";
 
 import { useUserStore } from "../../../store/userStore";
-import { apiRequest } from "../../../lib/api";
+import { apiRequest, API_BASE_URL, getAccessToken } from "../../../lib/api";
+import * as signalR from "@microsoft/signalr";
 import { startEmergencyLocationSharing, stopEmergencyLocationSharing } from "../../../services/emergencyLocationSharing";
 
 
@@ -274,6 +276,10 @@ const Emergency = () => {
     onDone: () => void;
   } | null>(null);
 
+  // Whether at least one donor has accepted/responded to each emergency.
+  const [journeyStartedByEmergency, setJourneyStartedByEmergency] =
+    useState<Record<string, boolean>>({});
+
   // Responding Donors Modal
   const [
     respondersModalVisible,
@@ -467,6 +473,36 @@ const Emergency = () => {
 
       setRequests(linkedRequests);
 
+      // Reporter tracking is enabled as soon as a donor accepts (I CAN HELP).
+      // Fetch actual response statuses instead of relying on a possibly stale count.
+      const currentReporterUid = auth.currentUser?.uid;
+      const ownEmergencies = linkedRequests.filter(
+        (item: any) => item.reporterUid === currentReporterUid
+      );
+      const journeyEntries = await Promise.all(
+        ownEmergencies.map(async (item: any) => {
+          const emergencyId = String(item.emergencyId || item.id);
+          try {
+            const responses = await apiRequest<any[]>(
+              `/api/emergencies/${emergencyId}/responses`
+            );
+            const started = Array.isArray(responses) && responses.some(
+              (response: any) => {
+                const status = String(response.status || response.response || "")
+                  .trim().toLowerCase();
+                return ["accepted", "pending", "responded", "on the way", "ontheway", "journey started", "journeystarted", "arrived", "completed"].includes(status);
+              }
+            );
+            return [emergencyId, started] as const;
+          } catch (error) {
+            console.warn("Unable to check emergency journey status:", emergencyId, error);
+            return [emergencyId, false] as const;
+          }
+        })
+      );
+      setJourneyStartedByEmergency(Object.fromEntries(journeyEntries));
+
+
       // ==================================================
       // 2. FETCH MY EMERGENCY RESPONSES
       // ==================================================
@@ -624,6 +660,151 @@ const Emergency = () => {
       setRefreshing(false);
     }
   };
+
+  // Live updates from donor I Can Help / Start Journey / Arrived / Completed.
+  // Independent connection: does not interfere with notification screen connection.
+  const fetchDataRef = useRef(fetchData);
+  fetchDataRef.current = fetchData;
+
+  useEffect(() => {
+    let disposed = false;
+    let hub: signalR.HubConnection | null = null;
+    let refreshingLive = false;
+    let refreshAgain = false;
+
+    const refreshOnEvent = async () => {
+      if (refreshingLive) { refreshAgain = true; return; }
+      refreshingLive = true;
+      try {
+        do {
+          refreshAgain = false;
+          if (!disposed) await fetchDataRef.current();
+        } while (refreshAgain && !disposed);
+      } finally { refreshingLive = false; }
+    };
+
+    const connect = async () => {
+      try {
+        const token = await getAccessToken();
+        if (!token || disposed) return;
+        const connection = new signalR.HubConnectionBuilder()
+          .withUrl(`${API_BASE_URL}/notificationHub`, { accessTokenFactory: () => token })
+          .withAutomaticReconnect([0, 2000, 5000, 10000, 30000])
+          .configureLogging(signalR.LogLevel.Warning)
+          .build();
+        hub = connection;
+        connection.on("EmergencyUpdated", refreshOnEvent);
+        connection.onreconnected(() => { if (!disposed) void refreshOnEvent(); });
+        await connection.start();
+        if (disposed) await connection.stop();
+        else await refreshOnEvent();
+      } catch (error) {
+        if (!disposed) console.warn("Emergency live updates unavailable:", error);
+      }
+    };
+
+    void connect();
+    return () => {
+      disposed = true;
+      if (hub) {
+        hub.off("EmergencyUpdated");
+        void hub.stop().catch(() => undefined);
+      }
+    };
+  }, []);
+
+  // Keep Community visibility in sync if a SignalR event was missed.
+  // The server's /api/emergencies/active endpoint decides which donor
+  // may still see a claimed emergency; never infer assignment from
+  // the local response list alone.
+  useEffect(() => {
+    let stopped = false;
+    let inFlight = false;
+
+    const syncActiveEmergencyVisibility = async () => {
+      if (stopped || inFlight || !auth.currentUser?.uid) return;
+      inFlight = true;
+      try {
+        const latest = await apiRequest<any[]>("/api/emergencies/active");
+        if (stopped || !Array.isArray(latest)) return;
+        const allowedIds = new Set(latest.map((item: any) => String(item.id).toLowerCase()));
+        // Immediately remove claimed emergencies from both source lists.
+        // The next full fetch restores all the original mapped fields.
+        setRequests(previous => previous.filter((item: any) =>
+          allowedIds.has(String(item.emergencyId || item.id).toLowerCase())
+        ));
+        setFilteredRequests(previous => previous.filter((item: any) =>
+          allowedIds.has(String(item.emergencyId || item.id).toLowerCase())
+        ));
+        // Fetch fully only if a request was removed; the normal SignalR
+        // handler and 30-second refresh handle additions and other changes.
+      } catch (error) {
+        console.warn("Emergency visibility sync unavailable:", error);
+      } finally {
+        inFlight = false;
+      }
+    };
+
+    const timer = setInterval(() => { void syncActiveEmergencyVisibility(); }, 5000);
+    return () => { stopped = true; clearInterval(timer); };
+  }, []);
+
+  // Fallback for missed SignalR events: check the reporter's accepted
+  // emergency responses without reloading the whole screen.
+  // SignalR remains the immediate update path; this catches missed events.
+  const requestsLiveRef = useRef(requests);
+  requestsLiveRef.current = requests;
+
+  useEffect(() => {
+    let disposed = false;
+    let checking = false;
+
+    const checkJourneys = async () => {
+      if (disposed || checking || !auth.currentUser?.uid) return;
+      checking = true;
+      try {
+        const uid = auth.currentUser.uid;
+        const ownActive = requestsLiveRef.current.filter((item: any) =>
+          String(item.reporterUid || '').toLowerCase() === uid.toLowerCase() &&
+          String(item.emergencyStatus || 'Active').toLowerCase() === 'active' &&
+          Number(item.reservedUnits ?? 0) < Number(item.unitsNeeded ?? 0)
+        );
+
+        const results = await Promise.all(ownActive.map(async (item: any) => {
+          const id = String(item.emergencyId || item.emergencyRequestId || item.id);
+          try {
+            const responses = await apiRequest<any[]>(`/api/emergencies/${id}/responses`);
+            const started = Array.isArray(responses) && responses.some((response: any) => {
+              const status = String(response.status || response.response || '').trim().toLowerCase();
+              return ['accepted', 'pending', 'responded', 'on the way', 'ontheway', 'journey started', 'journeystarted', 'arrived', 'completed'].includes(status);
+            });
+            return [id, started] as const;
+          } catch (error) {
+            console.warn('Journey status check failed:', id, error);
+            return null;
+          }
+        }));
+
+        if (disposed) return;
+        setJourneyStartedByEmergency(previous => {
+          const next = { ...previous };
+          let changed = false;
+          for (const entry of results) {
+            if (!entry) continue;
+            const [id, started] = entry;
+            if (next[id] !== started) { next[id] = started; changed = true; }
+          }
+          return changed ? next : previous;
+        });
+      } finally {
+        checking = false;
+      }
+    };
+
+    const timer = setInterval(() => { void checkJourneys(); }, 3000);
+    void checkJourneys();
+    return () => { disposed = true; clearInterval(timer); };
+  }, []);
 
   // ======================================================
   // FETCH BLOOD BANK CONTACT (settings/bloodBank)
@@ -2317,7 +2498,10 @@ const Emergency = () => {
                             );
                           })()}
 
-                          {req.reporterUid === auth.currentUser?.uid && (
+                          {req.reporterUid === auth.currentUser?.uid &&
+                            String(req.emergencyStatus || "Active").toLowerCase() === "active" &&
+                            Number(req.reservedUnits ?? 0) < Number(req.unitsNeeded ?? 0) &&
+                            journeyStartedByEmergency[String(req.emergencyId || req.emergencyRequestId || req.id)] === true && (
                             <TouchableOpacity
                               activeOpacity={0.85}
                               onPress={() => router.push({
