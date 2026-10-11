@@ -22,7 +22,6 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { auth, db } from "../../../config/backendConfig";
-
 interface BloodRequestResponder {
   id: string;
   bloodRequestId: string;
@@ -35,7 +34,6 @@ interface BloodRequestResponder {
   createdAt?: any;
   updatedAt?: any;
 }
-
 const Requests = () => {
   const [requests, setRequests] = useState<any[]>([]);
   const [filteredRequests, setFilteredRequests] = useState<any[]>([]);
@@ -43,31 +41,26 @@ const Requests = () => {
   const [, setTimeTick] = useState(0);
   const [loading, setLoading] = useState(true);
   const [donateLoading, setDonateLoading] = useState(false);
+  const [respondedRequestIds, setRespondedRequestIds] = useState<string[]>([]);
   const [responderLoading, setResponderLoading] = useState(false);
   const [responderActionLoading, setResponderActionLoading] = useState(false);
   const [bloodResponders, setBloodResponders] = useState<BloodRequestResponder[]>([]);
   const [inlineResponders, setInlineResponders] = useState<Record<string, BloodRequestResponder[]>>({});
   const [expandedResponderRequestId, setExpandedResponderRequestId] =
     useState<string | null>(null);
-
   // ======================================================
   // DETAIL CARD MODAL
   // ======================================================
-
   const [selectedRequest, setSelectedRequest] =
     useState<any | null>(null);
-
   const [detailVisible, setDetailVisible] =
     useState(false);
-
   const loadRequestResponders = async (requestId: string) => {
     setResponderLoading(true);
-
     try {
       const data = await apiRequest<any[]>(
         `/api/blood-requests/${requestId}/responses`,
       );
-
       setBloodResponders(
         (data || []).map((response: any) => ({
           id: String(response.id ?? response.Id),
@@ -110,22 +103,18 @@ const Requests = () => {
       setResponderLoading(false);
     }
   };
-
   const loadInlineResponders = async (requestList: any[]) => {
     const ownRequests = requestList.filter((req) => req.isOwnRequest && req.id);
-
     if (ownRequests.length === 0) {
       setInlineResponders({});
       return;
     }
-
     const entries = await Promise.all(
       ownRequests.map(async (req) => {
         try {
           const data = await apiRequest<any[]>(
             `/api/blood-requests/${req.id}/responses`,
           );
-
           const responses: BloodRequestResponder[] = (data || []).map(
             (response: any) => ({
               id: String(response.id ?? response.Id),
@@ -166,148 +155,121 @@ const Requests = () => {
                 response.UpdatedAt,
             }),
           );
-
           return [String(req.id), responses] as const;
         } catch {
           return [String(req.id), []] as const;
         }
       }),
     );
-
     setInlineResponders(Object.fromEntries(entries));
   };
-
   const openRequestDetail = async (req: any) => {
     setSelectedRequest(req);
     setBloodResponders([]);
     setDetailVisible(true);
-
     if (req.isOwnRequest && req.id) {
       await loadRequestResponders(String(req.id));
     }
   };
-
   const closeRequestDetail = () => {
     if (donateLoading || responderActionLoading) return;
-
     setDetailVisible(false);
     setSelectedRequest(null);
     setBloodResponders([]);
   };
-
   // ======================================================
   // LOAD REQUESTS
   // ======================================================
-
   useEffect(() => {
     fetchRequests();
-
     // Sync request status changes made from another phone.
     const syncInterval = setInterval(() => {
       fetchRequests();
     }, 2000);
-
     return () => clearInterval(syncInterval);
   }, []);
-
   // ======================================================
   // LIVE "TIME AGO" UPDATE
   // ======================================================
-
   useEffect(() => {
     const timeInterval = setInterval(() => {
       // Force a lightweight re-render so getTimeAgo(createdAt)
       // keeps changing: 1 min ago -> 2 mins ago -> 1 hour ago...
       setTimeTick((value) => value + 1);
     }, 1000);
-
     return () => clearInterval(timeInterval);
   }, []);
-
   // ======================================================
   // REMOVE EXPIRED REQUESTS FROM UI
   // ======================================================
-
   useEffect(() => {
     const removeExpiredRequests = () => {
       const now = Date.now();
-
       const isNotExpired = (request: any) => {
         if (!request?.expireAt) return true;
-
         const expireDate = request.expireAt?.toDate
           ? request.expireAt.toDate()
           : new Date(request.expireAt);
-
         if (Number.isNaN(expireDate.getTime())) {
           return true;
         }
-
         return expireDate.getTime() > now;
       };
-
       setRequests((current) =>
         current.filter(isNotExpired),
       );
-
       setFilteredRequests((current) =>
         current.filter(isNotExpired),
       );
-
       setSelectedRequest((current: any) => {
         if (!current || isNotExpired(current)) {
           return current;
         }
-
         setDetailVisible(false);
-
         return null;
       });
     };
-
     removeExpiredRequests();
-
     const expiryInterval = setInterval(
       removeExpiredRequests,
       10000,
     );
-
     return () =>
       clearInterval(expiryInterval);
   }, []);
-
   // ======================================================
   // FETCH BLOOD REQUESTS
   // ======================================================
-
   const fetchRequests = async () => {
     try {
       const currentUid = auth.currentUser?.uid;
-
       // Load own requests separately so Matched requests remain visible,
       // and load community Pending requests for donation.
-      const [myData, pendingData] = await Promise.all([
+      const [myData, pendingData, respondedIds] = await Promise.all([
         apiRequest<any[]>("/api/blood-requests/my").catch(() => []),
         apiRequest<any[]>("/api/blood-requests/pending").catch(() => []),
-      ]);
-
+          apiRequest<string[]>("/api/blood-requests/my-responded-ids")
+            .catch((error) => {
+              console.warn("Could not refresh responded request IDs:", error);
+              return null;
+            }),
+        ]);
+        if (Array.isArray(respondedIds)) {
+          setRespondedRequestIds(respondedIds.map(String));
+        }
       const merged = [...(myData || []), ...(pendingData || [])];
       const unique = new Map<string, any>();
-
       merged.forEach((raw: any) => {
         const id = String(raw.id ?? raw.Id ?? "");
         if (!id) return;
-
         const reporterUid =
           raw.reporterUid ??
           raw.ReporterUid;
-
         const status = String(
           raw.status ??
           raw.Status ??
           "Pending",
         ).toLowerCase();
-
         // Completed/cancelled/rejected requests disappear automatically.
         if (
           status === "completed" ||
@@ -317,18 +279,15 @@ const Requests = () => {
         ) {
           return;
         }
-
         const isOwnRequest =
           !!currentUid &&
           !!reporterUid &&
           String(reporterUid).toLowerCase() ===
             String(currentUid).toLowerCase();
-
         // Other users should only appear while still Pending.
         if (!isOwnRequest && status !== "pending") {
           return;
         }
-
         unique.set(id, {
           ...raw,
           id,
@@ -336,19 +295,15 @@ const Requests = () => {
           isOwnRequest,
         });
       });
-
       const requestList = Array.from(unique.values()).sort(
         (a: any, b: any) =>
           new Date(b.createdAt ?? b.CreatedAt ?? 0).getTime() -
           new Date(a.createdAt ?? a.CreatedAt ?? 0).getTime(),
       );
-
       setRequests(requestList);
-
       // Also refresh donor responses so requester sees I Can Donate
       // responses directly on the request card without manual refresh.
       await loadInlineResponders(requestList);
-
       if (searchQuery.trim()) {
         const search = searchQuery.toLowerCase();
         setFilteredRequests(
@@ -381,27 +336,21 @@ const Requests = () => {
       setLoading(false);
     }
   };
-
   // ======================================================
   // SEARCH
   // ======================================================
-
   const handleSearch = (
     text: string,
   ) => {
     setSearchQuery(text);
-
     if (text.trim() === "") {
       setFilteredRequests(
         requests,
       );
-
       return;
     }
-
     const search =
       text.toLowerCase();
-
     const filtered =
       requests.filter((req) => {
         return (
@@ -422,16 +371,13 @@ const Requests = () => {
             .includes(search)
         );
       });
-
     setFilteredRequests(
       filtered,
     );
   };
-
   // ======================================================
   // CALL REQUESTER
   // ======================================================
-
   const handleCall = (
     phoneNumber?: string,
   ) => {
@@ -440,26 +386,21 @@ const Requests = () => {
         "Contact Unavailable",
         "Contact number is not available.",
       );
-
       return;
     }
-
     const sanitizedNumber =
       phoneNumber.replace(
         /[^\d+]/g,
         "",
       );
-
     const url =
       `tel:${sanitizedNumber}`;
-
     Linking.openURL(url).catch(
       (error) => {
         console.error(
           "Error opening dialer:",
           error,
         );
-
         Alert.alert(
           "Call Failed",
           "Phone calls are not supported on this device.",
@@ -467,13 +408,11 @@ const Requests = () => {
       },
     );
   };
-
   // ======================================================
   // I CAN DONATE
   // ASP.NET CORE:
   // POST /api/blood-requests/{id}/respond
   // ======================================================
-
   const handleOfferToDonate =
     async () => {
       if (
@@ -482,28 +421,22 @@ const Requests = () => {
       ) {
         return;
       }
-
       if (!selectedRequest.id) {
         Alert.alert(
           "Error",
           "Blood request reference was not found.",
         );
-
         return;
       }
-
       const currentUser =
         auth.currentUser;
-
       if (!currentUser) {
         Alert.alert(
           "Login Required",
           "Please login again before responding.",
         );
-
         return;
       }
-
       // Extra frontend protection.
       // Backend also validates this.
       if (
@@ -515,12 +448,14 @@ const Requests = () => {
           "Not Allowed",
           "You cannot respond to your own blood request.",
         );
-
+        return;
+      }
+      if (respondedRequestIds.includes(String(selectedRequest.id))) {
+        Alert.alert("Already Responded", "You have already offered to donate for this request.");
         return;
       }
 
       setDonateLoading(true);
-
       try {
         await apiRequest(
           `/api/blood-requests/${selectedRequest.id}/respond`,
@@ -528,7 +463,6 @@ const Requests = () => {
             method: "POST",
           },
         );
-
         // Backend now handles:
         // 1. BloodRequestResponse SQL insert
         // 2. Duplicate response protection
@@ -536,6 +470,9 @@ const Requests = () => {
         // 4. Private notification insert
         // 5. SignalR notification to requester
         // 6. Expo push notification
+          setRespondedRequestIds((current) =>
+            Array.from(new Set([...current, String(selectedRequest.id)])),
+          );
 
         Alert.alert(
           "Response Sent ❤️",
@@ -547,7 +484,6 @@ const Requests = () => {
                 setDetailVisible(
                   false,
                 );
-
                 setSelectedRequest(
                   null,
                 );
@@ -560,11 +496,9 @@ const Requests = () => {
           "I Can Donate error:",
           error,
         );
-
         const message =
           error?.message ||
           "Could not send your donation response. Please try again.";
-
         Alert.alert(
           "Could Not Send Response",
           message,
@@ -573,11 +507,9 @@ const Requests = () => {
         setDonateLoading(false);
       }
     };
-
   // ======================================================
   // MANAGE DONOR RESPONSES FROM MY REQUEST
   // ======================================================
-
   const runResponderAction = async (
     response: BloodRequestResponder,
     action: "confirm" | "reject" | "complete",
@@ -585,45 +517,36 @@ const Requests = () => {
     if (!selectedRequest?.id || responderActionLoading) {
       return;
     }
-
     setResponderActionLoading(true);
-
     try {
       await apiRequest(
         `/api/blood-requests/${selectedRequest.id}/responses/${response.id}/${action}`,
         { method: "PATCH" },
       );
-
       if (action === "complete") {
         // Remove the completed request immediately from the UI.
         const completedId = String(selectedRequest.id);
-
         setRequests((current) =>
           current.filter(
             (item) => String(item.id) !== completedId,
           ),
         );
-
         setFilteredRequests((current) =>
           current.filter(
             (item) => String(item.id) !== completedId,
           ),
         );
-
         setDetailVisible(false);
         setSelectedRequest(null);
         setBloodResponders([]);
-
         Alert.alert(
           "Donation Completed ❤️",
           "Donation complete ho gayi. Request list se automatically remove kar di gayi hai.",
         );
-
         // Sync again with SQL/backend.
         await fetchRequests();
         return;
       }
-
       if (action === "reject") {
         // Rejected response disappears immediately from the requester UI.
         setBloodResponders((current) =>
@@ -636,7 +559,6 @@ const Requests = () => {
           String(selectedRequest.id),
         );
       }
-
       // Confirm changes request status to Matched.
       setSelectedRequest((current: any) =>
         current
@@ -649,7 +571,6 @@ const Requests = () => {
             }
           : current,
       );
-
       Alert.alert(
         action === "confirm"
           ? "Donor Confirmed"
@@ -658,14 +579,12 @@ const Requests = () => {
           ? `${response.donorName} ko donor confirm kar diya gaya hai.`
           : `${response.donorName} ka response reject kar diya gaya hai.`,
       );
-
       await fetchRequests();
     } catch (error: any) {
       console.error(
         `Responder ${action} failed:`,
         error,
       );
-
       Alert.alert(
         "Action Failed",
         error?.message ||
@@ -675,22 +594,18 @@ const Requests = () => {
       setResponderActionLoading(false);
     }
   };
-
   const runInlineResponderAction = async (
     request: any,
     response: BloodRequestResponder,
     action: "confirm" | "reject",
   ) => {
     if (responderActionLoading) return;
-
     setResponderActionLoading(true);
-
     try {
       await apiRequest(
         `/api/blood-requests/${request.id}/responses/${response.id}/${action}`,
         { method: "PATCH" },
       );
-
       // New flow: CONFIRM means donation is completed immediately.
       // This removes the separate Complete step.
       if (action === "confirm") {
@@ -698,7 +613,6 @@ const Requests = () => {
           `/api/blood-requests/${request.id}/responses/${response.id}/complete`,
           { method: "PATCH" },
         );
-
         // Remove completed request instantly from requester UI.
         setRequests((current) =>
           current.filter(
@@ -716,16 +630,13 @@ const Requests = () => {
           return next;
         });
         setExpandedResponderRequestId(null);
-
         Alert.alert(
           "Donation Completed",
           `${response.donorName} confirm ho gaya. Request complete karke list se remove kar di gayi hai.`,
         );
-
         await fetchRequests();
         return;
       }
-
       if (action === "reject") {
         setInlineResponders((current) => ({
           ...current,
@@ -745,14 +656,12 @@ const Requests = () => {
           ),
         }));
       }
-
       // Confirm branch already returns above, so reaching here means
       // the action is definitely "reject".
       Alert.alert(
         "Response Rejected",
         `${response.donorName} ka response reject kar diya gaya hai.`,
       );
-
       await fetchRequests();
     } catch (error: any) {
       Alert.alert(
@@ -763,7 +672,6 @@ const Requests = () => {
       setResponderActionLoading(false);
     }
   };
-
   const confirmInlineResponder = (
     request: any,
     response: BloodRequestResponder,
@@ -781,7 +689,6 @@ const Requests = () => {
       ],
     );
   };
-
   const rejectInlineResponder = (
     request: any,
     response: BloodRequestResponder,
@@ -800,7 +707,6 @@ const Requests = () => {
       ],
     );
   };
-
   const confirmResponder = (
     response: BloodRequestResponder,
   ) => {
@@ -823,7 +729,6 @@ const Requests = () => {
       ],
     );
   };
-
   const rejectResponder = (
     response: BloodRequestResponder,
   ) => {
@@ -847,7 +752,6 @@ const Requests = () => {
       ],
     );
   };
-
   const completeDonation = (
     response: BloodRequestResponder,
   ) => {
@@ -870,92 +774,73 @@ const Requests = () => {
       ],
     );
   };
-
   // ======================================================
   // TIME AGO
   // ======================================================
-
   const getTimeAgo = (
     timestamp: any,
   ) => {
     if (!timestamp) {
       return "0 secs ago";
     }
-
     // Backend sends UTC ISO timestamps. If SQL/ASP.NET returns an ISO
     // string without timezone information, explicitly treat it as UTC.
     let date: Date;
-
     if (timestamp?.toDate) {
       date = timestamp.toDate();
     } else if (typeof timestamp === "string") {
       const value = timestamp.trim();
       const hasTimezone =
         /(?:Z|[+-]\d{2}:?\d{2})$/i.test(value);
-
       date = new Date(
         hasTimezone ? value : `${value}Z`,
       );
     } else {
       date = new Date(timestamp);
     }
-
     if (Number.isNaN(date.getTime())) {
       return "0 secs ago";
     }
-
     const seconds = Math.max(
       0,
       Math.floor(
         (Date.now() - date.getTime()) / 1000,
       ),
     );
-
     if (seconds < 60) {
       return `${seconds} sec${
         seconds === 1 ? "" : "s"
       } ago`;
     }
-
     const minutes = Math.floor(seconds / 60);
-
     if (minutes < 60) {
       return `${minutes} min${
         minutes === 1 ? "" : "s"
       } ago`;
     }
-
     const hours = Math.floor(minutes / 60);
-
     if (hours < 24) {
       return `${hours} hour${
         hours === 1 ? "" : "s"
       } ago`;
     }
-
     const days = Math.floor(hours / 24);
-
     return `${days} day${
       days === 1 ? "" : "s"
     } ago`;
   };
-
   // ======================================================
   // GROUP REQUESTS
   // ======================================================
-
   const myRequests = filteredRequests.filter(
     (req) => req.isOwnRequest,
   );
-
   const donorNeededRequests = filteredRequests.filter(
     (req) => !req.isOwnRequest,
   );
-
   // ======================================================
   // UI
   // ======================================================
-
   return (
     <SafeAreaView
       className="flex-1 bg-white"
@@ -966,14 +851,12 @@ const Requests = () => {
         backgroundColor="transparent"
         translucent
       />
-
       {loading ? (
         <View className="flex-1 items-center justify-center">
           <ActivityIndicator
             size="large"
             color="#DC2626"
           />
-
           <Text className="mt-4 font-medium text-gray-400">
             Loading Requests...
           </Text>
@@ -991,7 +874,6 @@ const Requests = () => {
           {/* ==========================================
               SEARCH BAR
           ========================================== */}
-
           <View className="border-b border-gray-50 px-4 py-4">
             <View className="flex-row items-center rounded-2xl border border-gray-100 bg-gray-50 px-4 shadow-sm">
               <Ionicons
@@ -999,7 +881,6 @@ const Requests = () => {
                 size={20}
                 color="#9CA3AF"
               />
-
               <TextInput
                 className="ml-3 flex-1 text-base font-semibold text-gray-900"
                 placeholder="Search by name, phone, blood, location..."
@@ -1011,7 +892,6 @@ const Requests = () => {
                   handleSearch
                 }
               />
-
               {searchQuery !==
                 "" && (
                 <Ionicons
@@ -1027,11 +907,9 @@ const Requests = () => {
               )}
             </View>
           </View>
-
           {/* ==========================================
               REQUEST GROUPS
           ========================================== */}
-
           {filteredRequests.length > 0 ? (
             <>
               {/* MY REQUESTS */}
@@ -1045,7 +923,6 @@ const Requests = () => {
                         color="#16A34A"
                       />
                     </View>
-
                     <View className="ml-3 flex-1">
                       <Text className="text-[15px] font-black text-gray-900">
                         My Requests
@@ -1054,14 +931,12 @@ const Requests = () => {
                         Requests posted by you
                       </Text>
                     </View>
-
                     <View className="rounded-full bg-green-50 px-3 py-1.5">
                       <Text className="text-[11px] font-black text-green-700">
                         {myRequests.length}
                       </Text>
                     </View>
                   </View>
-
                   {myRequests.map((req) => (
                     <View key={req.id} className="mx-4 mb-4 overflow-hidden rounded-[24px] border border-gray-100 bg-white">
                       <View className="px-3 pt-3">
@@ -1077,7 +952,6 @@ const Requests = () => {
                           </Text>
                         </View>
                       </View>
-
                       <BloodRequestCard
                         patientName={req.patientName}
                         bloodType={req.bloodType}
@@ -1103,7 +977,6 @@ const Requests = () => {
                         }
                       />
                       </View>
-
                       {(inlineResponders[String(req.id)] || [])
                         .filter(
                           (response) =>
@@ -1113,7 +986,6 @@ const Requests = () => {
                         .map((response) => {
                           const isExpanded =
                             expandedResponderRequestId === String(req.id);
-
                           return (
                             <View
                               key={response.id}
@@ -1135,7 +1007,6 @@ const Requests = () => {
                                     color="#16A34A"
                                   />
                                 </View>
-
                                 <View className="ml-3 flex-1">
                                   <Text className="text-[12px] font-black text-gray-900">
                                     Responder
@@ -1144,7 +1015,6 @@ const Requests = () => {
                                     {response.donorName} • {response.bloodType || "Donor"}
                                   </Text>
                                 </View>
-
                                 <Ionicons
                                   name={
                                     isExpanded
@@ -1155,7 +1025,6 @@ const Requests = () => {
                                   color="#16A34A"
                                 />
                               </TouchableOpacity>
-
                               {isExpanded ? (
                                 <View className="px-2 pb-1 pt-3">
                                   <View className="flex-row items-start">
@@ -1166,12 +1035,10 @@ const Requests = () => {
                                         color="#16A34A"
                                       />
                                     </View>
-
                                     <View className="ml-3 flex-1">
                                       <Text className="text-[14px] font-black text-gray-900">
                                         {response.donorName}
                                       </Text>
-
                                       <View className="mt-1 flex-row items-center">
                                         <Ionicons
                                           name="water"
@@ -1182,7 +1049,6 @@ const Requests = () => {
                                           Blood Type: {response.bloodType || "N/A"}
                                         </Text>
                                       </View>
-
                                       <View className="mt-1 flex-row items-center">
                                         <Ionicons
                                           name="call-outline"
@@ -1193,7 +1059,6 @@ const Requests = () => {
                                           {response.donorPhone || "Phone not available"}
                                         </Text>
                                       </View>
-
                                       <View className="mt-1 flex-row items-center">
                                         <Ionicons
                                           name="location-outline"
@@ -1208,7 +1073,6 @@ const Requests = () => {
                                         </Text>
                                       </View>
                                     </View>
-
                                     {response.donorPhone ? (
                                       <TouchableOpacity
                                         onPress={() =>
@@ -1224,7 +1088,6 @@ const Requests = () => {
                                       </TouchableOpacity>
                                     ) : null}
                                   </View>
-
                                   <View className="mt-3 flex-row">
                                     <TouchableOpacity
                                       disabled={responderActionLoading}
@@ -1237,7 +1100,6 @@ const Requests = () => {
                                         CONFIRM
                                       </Text>
                                     </TouchableOpacity>
-
                                     <TouchableOpacity
                                       disabled={responderActionLoading}
                                       onPress={() =>
@@ -1259,7 +1121,6 @@ const Requests = () => {
                   ))}
                 </View>
               )}
-
               {/* DONOR NEEDED */}
               {donorNeededRequests.length > 0 && (
                 <View className="mb-4">
@@ -1271,7 +1132,6 @@ const Requests = () => {
                         color="#2563EB"
                       />
                     </View>
-
                     <View className="ml-3 flex-1">
                       <Text className="text-[15px] font-black text-gray-900">
                         Donor Needed
@@ -1280,14 +1140,12 @@ const Requests = () => {
                         Requests from other users
                       </Text>
                     </View>
-
                     <View className="rounded-full bg-blue-50 px-3 py-1.5">
                       <Text className="text-[11px] font-black text-blue-600">
                         {donorNeededRequests.length}
                       </Text>
                     </View>
                   </View>
-
                   {donorNeededRequests.map((req) => (
                     <View
                       key={req.id}
@@ -1319,9 +1177,15 @@ const Requests = () => {
                           }
                         />
                       </View>
-
                       <View className="mx-4 h-px bg-gray-100" />
-
+                      {respondedRequestIds.includes(String(req.id)) ? (
+                        <View className="m-3 mt-2 flex-row items-center justify-center rounded-2xl bg-green-50 py-3.5">
+                          <Ionicons name="checkmark-circle" size={17} color="#16A34A" />
+                          <Text className="ml-2 text-[11px] font-black uppercase text-green-700">
+                            Already Responded
+                          </Text>
+                        </View>
+                      ) : (
                       <TouchableOpacity
                         activeOpacity={0.88}
                         onPress={() => {
@@ -1340,6 +1204,7 @@ const Requests = () => {
                           I Can Donate
                         </Text>
                       </TouchableOpacity>
+                      )}
                     </View>
                   ))}
                 </View>
@@ -1352,11 +1217,9 @@ const Requests = () => {
                 size={80}
                 color="#F3F4F6"
               />
-
               <Text className="mt-4 text-lg font-bold text-gray-400">
                 No requests found
               </Text>
-
               <Text className="text-sm text-gray-300">
                 Try searching with different criteria
               </Text>
@@ -1364,11 +1227,9 @@ const Requests = () => {
           )}
         </ScrollView>
       )}
-
       {/* ================================================
           REQUEST DETAIL MODAL
       ================================================ */}
-
       <Modal
         visible={detailVisible}
         transparent
@@ -1379,11 +1240,8 @@ const Requests = () => {
       >
         <View className="flex-1 justify-end bg-black/50">
           <View className="rounded-t-3xl bg-white px-6 pb-8 pt-5">
-
             {/* Drag Handle */}
-
             <View className="mb-4 h-1.5 w-12 self-center rounded-full bg-gray-200" />
-
             {selectedRequest && (
               <ScrollView
                 showsVerticalScrollIndicator={
@@ -1393,12 +1251,10 @@ const Requests = () => {
                 {/* ==================================
                     HEADER
                 ================================== */}
-
                 <View className="flex-row items-center justify-between">
                   <Text className="text-xl font-black text-gray-900">
                     Request Details
                   </Text>
-
                   <TouchableOpacity
                     disabled={
                       donateLoading
@@ -1415,11 +1271,9 @@ const Requests = () => {
                     />
                   </TouchableOpacity>
                 </View>
-
                 {/* ==================================
                     PATIENT + BLOOD TYPE
                 ================================== */}
-
                 <View className="mt-5 flex-row items-center">
                   <View className="h-16 w-16 items-center justify-center rounded-2xl bg-red-600">
                     <Text className="text-lg font-black text-white">
@@ -1428,14 +1282,12 @@ const Requests = () => {
                       }
                     </Text>
                   </View>
-
                   <View className="ml-4 flex-1">
                     <Text className="text-lg font-black text-gray-900">
                       {
                         selectedRequest.patientName
                       }
                     </Text>
-
                     <View className="mt-1.5 flex-row items-center">
                       <View
                         className={`rounded-full px-2.5 py-1 ${
@@ -1464,11 +1316,9 @@ const Requests = () => {
                     </View>
                   </View>
                 </View>
-
                 {/* ==================================
                     DETAILS
                 ================================== */}
-
                 <View className="mt-6 gap-4">
                   <DetailRow
                     icon="location-outline"
@@ -1486,7 +1336,6 @@ const Requests = () => {
                         : ""
                     }`}
                   />
-
                   <DetailRow
                     icon="water-outline"
                     label="Units Needed"
@@ -1505,7 +1354,6 @@ const Requests = () => {
                         : "1 unit"
                     }
                   />
-
                   <DetailRow
                     icon="call-outline"
                     label="Contact Phone"
@@ -1514,7 +1362,6 @@ const Requests = () => {
                       "Not provided"
                     }
                   />
-
                   <DetailRow
                     icon="time-outline"
                     label="Posted"
@@ -1522,7 +1369,6 @@ const Requests = () => {
                       selectedRequest.createdAt,
                     )}
                   />
-
                   {selectedRequest.additionalNotes ? (
                     <DetailRow
                       icon="document-text-outline"
@@ -1533,11 +1379,9 @@ const Requests = () => {
                     />
                   ) : null}
                 </View>
-
                 {/* ==================================
                     ACTION BUTTONS
                 ================================== */}
-
                 <View className="mt-7">
                   {selectedRequest.isOwnRequest ? (
                     <View>
@@ -1550,7 +1394,6 @@ const Requests = () => {
                               color="#16A34A"
                             />
                           </View>
-
                           <View className="ml-2.5">
                             <Text className="text-[14px] font-black text-gray-900">
                               Donor Responses
@@ -1560,14 +1403,12 @@ const Requests = () => {
                             </Text>
                           </View>
                         </View>
-
                         <View className="rounded-full bg-green-50 px-3 py-1.5">
                           <Text className="text-[11px] font-black text-green-700">
                             {bloodResponders.length}
                           </Text>
                         </View>
                       </View>
-
                       {responderLoading ? (
                         <View className="items-center rounded-2xl border border-gray-100 bg-[#F8F9FB] py-8">
                           <ActivityIndicator
@@ -1597,7 +1438,6 @@ const Requests = () => {
                           const status = String(
                             response.status || "Pending",
                           ).toLowerCase();
-
                           return (
                             <View
                               key={response.id}
@@ -1611,12 +1451,10 @@ const Requests = () => {
                                     color="#DC2626"
                                   />
                                 </View>
-
                                 <View className="ml-3 flex-1">
                                   <Text className="text-[15px] font-black text-gray-900">
                                     {response.donorName}
                                   </Text>
-
                                   <Text
                                     className={`mt-0.5 text-[10px] font-black uppercase ${
                                       status === "confirmed" ||
@@ -1630,14 +1468,12 @@ const Requests = () => {
                                     {response.status}
                                   </Text>
                                 </View>
-
                                 <View className="rounded-xl bg-red-50 px-3 py-2">
                                   <Text className="text-[16px] font-black text-red-600">
                                     {response.bloodType || "—"}
                                   </Text>
                                 </View>
                               </View>
-
                               <TouchableOpacity
                                 disabled={!response.donorPhone}
                                 onPress={() =>
@@ -1657,7 +1493,6 @@ const Requests = () => {
                                     "Phone not available"}
                                 </Text>
                               </TouchableOpacity>
-
                               {status === "pending" && (
                                 <View className="mt-3 flex-row">
                                   <TouchableOpacity
@@ -1673,7 +1508,6 @@ const Requests = () => {
                                       CONFIRM
                                     </Text>
                                   </TouchableOpacity>
-
                                   <TouchableOpacity
                                     disabled={responderActionLoading}
                                     onPress={() =>
@@ -1689,7 +1523,6 @@ const Requests = () => {
                                   </TouchableOpacity>
                                 </View>
                               )}
-
                               {status === "confirmed" && (
                                 <TouchableOpacity
                                   disabled={responderActionLoading}
@@ -1712,7 +1545,6 @@ const Requests = () => {
                                   )}
                                 </TouchableOpacity>
                               )}
-
                               {status === "rejected" && (
                                 <View className="mt-3 rounded-xl bg-gray-100 py-3">
                                   <Text className="text-center text-[11px] font-black text-gray-500">
@@ -1724,6 +1556,11 @@ const Requests = () => {
                           );
                         })
                       )}
+                    </View>
+                  ) : respondedRequestIds.includes(String(selectedRequest.id)) ? (
+                    <View className="flex-row items-center justify-center rounded-2xl bg-green-50 py-4">
+                      <Ionicons name="checkmark-circle" size={19} color="#16A34A" />
+                      <Text className="ml-2 text-xs font-black uppercase text-green-700">Already Responded</Text>
                     </View>
                   ) : (
                     <>
@@ -1753,7 +1590,6 @@ const Requests = () => {
                           </>
                         )}
                       </TouchableOpacity>
-
                       <TouchableOpacity
                         activeOpacity={0.85}
                         disabled={donateLoading}
@@ -1784,11 +1620,9 @@ const Requests = () => {
     </SafeAreaView>
   );
 };
-
 // ======================================================
 // DETAIL ROW
 // ======================================================
-
 const DetailRow = ({
   icon,
   label,
@@ -1806,17 +1640,14 @@ const DetailRow = ({
         color="#6B7280"
       />
     </View>
-
     <View className="ml-3 flex-1">
       <Text className="text-[10px] font-bold uppercase tracking-wider text-gray-400">
         {label}
       </Text>
-
       <Text className="mt-0.5 text-sm font-semibold text-gray-800">
         {value}
       </Text>
     </View>
   </View>
 );
-
 export default Requests;

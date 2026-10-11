@@ -2317,6 +2317,21 @@ const Emergency = () => {
                             );
                           })()}
 
+                          {req.reporterUid === auth.currentUser?.uid && (
+                            <TouchableOpacity
+                              activeOpacity={0.85}
+                              onPress={() => router.push({
+                                pathname: "/emergency-insights",
+                                params: { emergencyId: String(req.emergencyId || req.emergencyRequestId || req.id) },
+                              } as any)}
+                              className="mb-3 flex-row items-center justify-center rounded-2xl bg-red-600 py-4"
+                            >
+                              <Ionicons name="pulse-outline" size={20} color="#FFFFFF" />
+                              <Text className="ml-2 text-sm font-black uppercase tracking-wider text-white">Track Emergency</Text>
+                              <Ionicons name="chevron-forward" size={18} color="#FFFFFF" />
+                            </TouchableOpacity>
+                          )}
+
                           {req.reporterUid === auth.currentUser?.uid &&
                             req.emergencyStatus !== "Resolved" && (
                               <View className="gap-2">
@@ -2424,7 +2439,7 @@ const Emergency = () => {
                                     </View>
                                   </View>
 
-                                  {myResponse.id && currentStatus !== "Completed" && (
+                                  {myResponse.id && (
                                     <TouchableOpacity
                                       activeOpacity={0.85}
                                       onPress={() => router.push({

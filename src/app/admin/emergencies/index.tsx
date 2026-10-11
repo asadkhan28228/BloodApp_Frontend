@@ -472,6 +472,22 @@ const EmergencyManagement = () => {
                 )}
               </View>
 
+              {/* Tracking / ETA dashboard */}
+              {Boolean(item.emergencyId) && (
+                <TouchableOpacity
+                  onPress={() => router.push({
+                    pathname: "/admin/emergencies/tracking" as any,
+                    params: { emergencyId: String(item.emergencyId) },
+                  })}
+                  className="mt-4 flex-row items-center justify-center rounded-2xl bg-blue-50 py-4"
+                >
+                  <Ionicons name="navigate-outline" size={18} color="#1D4ED8" />
+                  <Text className="ml-2 text-xs font-black uppercase text-blue-700">
+                    Live Tracking & ETA
+                  </Text>
+                </TouchableOpacity>
+              )}
+
               {/* Resolve */}
 
               {!resolved && (
