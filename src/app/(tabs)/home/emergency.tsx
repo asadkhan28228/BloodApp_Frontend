@@ -44,7 +44,7 @@ import BloodRequestCard from "@/src/components/bloodRequestCard";
 
 import Donorcard from "@/src/components/donorcard";
 
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 
 import { useUserStore } from "../../../store/userStore";
 import { apiRequest, API_BASE_URL, getAccessToken } from "../../../lib/api";
@@ -363,6 +363,113 @@ const Emergency = () => {
   const fetchData = async () => {
     try {
       // ==================================================
+      // 3. FETCH AVAILABLE DONORS
+      // ==================================================
+
+      const donorsSnapshot =
+        await getDocs(
+          collection(
+            db,
+            "users"
+          )
+        );
+
+      const availableDonorList:
+        any[] = [];
+
+      // Use saved coordinates immediately; avoid blocking donor list on GPS.
+      const liveCurrentLocation: { latitude: number; longitude: number } | null = null;
+
+      const currentLat = currentUserData?.latitude ?? null;
+      const currentLng = currentUserData?.longitude ?? null;
+
+
+      donorsSnapshot.forEach(
+        (document: any) => {
+          const data =
+            document.data();
+
+          if (
+            data.availableToDonate !==
+              false &&
+            data.role !==
+              "admin" &&
+            document.id !==
+              auth.currentUser?.uid
+          ) {
+            let distance:
+              number | null = null;
+
+            if (
+              typeof currentLat ===
+                "number" &&
+              typeof currentLng ===
+                "number" &&
+              typeof data.latitude ===
+                "number" &&
+              typeof data.longitude ===
+                "number"
+            ) {
+              distance =
+                calculateDistance(
+                  currentLat,
+                  currentLng,
+                  data.latitude,
+                  data.longitude
+                );
+            }
+
+            availableDonorList.push(
+              {
+                id:
+                  document.id,
+                ...data,
+                distance,
+              }
+            );
+          }
+        }
+      );
+
+      // Nearest donors first.
+      // Donors without GPS location go to the bottom.
+      availableDonorList.sort(
+        (a, b) => {
+          if (
+            a.distance === null &&
+            b.distance === null
+          ) {
+            return 0;
+          }
+
+          if (
+            a.distance === null
+          ) {
+            return 1;
+          }
+
+          if (
+            b.distance === null
+          ) {
+            return -1;
+          }
+
+          return (
+            a.distance -
+            b.distance
+          );
+        }
+      );
+
+      // Populate both donor arrays BEFORE hiding the loading state.
+      // Otherwise the first render incorrectly shows "No Ready Donors Found"
+      // while filteredDonors is still empty.
+      setDonors(availableDonorList);
+      filterDonors(searchQuery, availableDonorList);
+      // Show ready donor cards immediately after the donor API finishes.
+      if (screenView === "donors") setLoading(false);
+
+      // ==================================================
       // 1. FETCH ACTIVE EMERGENCIES DIRECTLY
       // ==================================================
       //
@@ -527,111 +634,6 @@ const Emergency = () => {
       }
 
       // ==================================================
-      // 3. FETCH AVAILABLE DONORS
-      // ==================================================
-
-      const donorsSnapshot =
-        await getDocs(
-          collection(
-            db,
-            "users"
-          )
-        );
-
-      const availableDonorList:
-        any[] = [];
-
-      const liveCurrentLocation =
-        await getFreshGpsLocation();
-
-      const currentLat =
-        liveCurrentLocation?.latitude ?? currentUserData?.latitude;
-
-      const currentLng =
-        liveCurrentLocation?.longitude ?? currentUserData?.longitude;
-
-      donorsSnapshot.forEach(
-        (document: any) => {
-          const data =
-            document.data();
-
-          if (
-            data.availableToDonate !==
-              false &&
-            data.role !==
-              "admin" &&
-            document.id !==
-              auth.currentUser?.uid
-          ) {
-            let distance:
-              number | null = null;
-
-            if (
-              typeof currentLat ===
-                "number" &&
-              typeof currentLng ===
-                "number" &&
-              typeof data.latitude ===
-                "number" &&
-              typeof data.longitude ===
-                "number"
-            ) {
-              distance =
-                calculateDistance(
-                  currentLat,
-                  currentLng,
-                  data.latitude,
-                  data.longitude
-                );
-            }
-
-            availableDonorList.push(
-              {
-                id:
-                  document.id,
-                ...data,
-                distance,
-              }
-            );
-          }
-        }
-      );
-
-      // Nearest donors first.
-      // Donors without GPS location go to the bottom.
-      availableDonorList.sort(
-        (a, b) => {
-          if (
-            a.distance === null &&
-            b.distance === null
-          ) {
-            return 0;
-          }
-
-          if (
-            a.distance === null
-          ) {
-            return 1;
-          }
-
-          if (
-            b.distance === null
-          ) {
-            return -1;
-          }
-
-          return (
-            a.distance -
-            b.distance
-          );
-        }
-      );
-
-      setDonors(
-        availableDonorList
-      );
-
-      // ==================================================
       // INITIALIZE FILTERS
       // ==================================================
 
@@ -644,10 +646,7 @@ const Emergency = () => {
           linkedRequests
         );
       } else {
-        filterDonors(
-          searchQuery,
-          availableDonorList
-        );
+        // Donors were filtered immediately after their API response above.
       }
     } catch (error) {
       console.error(
@@ -662,17 +661,19 @@ const Emergency = () => {
   };
 
   // Live updates from donor I Can Help / Start Journey / Arrived / Completed.
-  // Independent connection: does not interfere with notification screen connection.
+  // Wait for connection.start() to settle before stopping during unmount.
   const fetchDataRef = useRef(fetchData);
   fetchDataRef.current = fetchData;
 
   useEffect(() => {
     let disposed = false;
     let hub: signalR.HubConnection | null = null;
+    let startPromise: Promise<void> | null = null;
     let refreshingLive = false;
     let refreshAgain = false;
 
     const refreshOnEvent = async () => {
+      if (disposed) return;
       if (refreshingLive) { refreshAgain = true; return; }
       refreshingLive = true;
       try {
@@ -680,24 +681,39 @@ const Emergency = () => {
           refreshAgain = false;
           if (!disposed) await fetchDataRef.current();
         } while (refreshAgain && !disposed);
-      } finally { refreshingLive = false; }
+      } finally {
+        refreshingLive = false;
+      }
     };
 
     const connect = async () => {
       try {
         const token = await getAccessToken();
         if (!token || disposed) return;
+
         const connection = new signalR.HubConnectionBuilder()
-          .withUrl(`${API_BASE_URL}/notificationHub`, { accessTokenFactory: () => token })
+          .withUrl(`${API_BASE_URL}/notificationHub`, {
+            accessTokenFactory: async () => (await getAccessToken()) || token,
+          })
           .withAutomaticReconnect([0, 2000, 5000, 10000, 30000])
           .configureLogging(signalR.LogLevel.Warning)
           .build();
+
         hub = connection;
         connection.on("EmergencyUpdated", refreshOnEvent);
-        connection.onreconnected(() => { if (!disposed) void refreshOnEvent(); });
-        await connection.start();
-        if (disposed) await connection.stop();
-        else await refreshOnEvent();
+        connection.onreconnected(() => {
+          if (!disposed) void refreshOnEvent();
+        });
+
+        // Cleanup must never call stop() while start() is still pending.
+        startPromise = connection.start();
+        await startPromise;
+
+        if (disposed) {
+          await connection.stop();
+          return;
+        }
+        await refreshOnEvent();
       } catch (error) {
         if (!disposed) console.warn("Emergency live updates unavailable:", error);
       }
@@ -706,10 +722,20 @@ const Emergency = () => {
     void connect();
     return () => {
       disposed = true;
-      if (hub) {
-        hub.off("EmergencyUpdated");
-        void hub.stop().catch(() => undefined);
-      }
+      if (!hub) return;
+
+      const connection = hub;
+      connection.off("EmergencyUpdated", refreshOnEvent);
+      // Defer stop until the initial connection attempt has finished.
+      // Catch failed starts so cleanup does not create unhandled rejections.
+      void (async () => {
+        if (startPromise) {
+          try { await startPromise; } catch { /* start failed; no active hub */ }
+        }
+        if (connection.state !== signalR.HubConnectionState.Disconnected) {
+          await connection.stop();
+        }
+      })().catch(() => undefined);
     };
   }, []);
 
@@ -839,29 +865,21 @@ const Emergency = () => {
   };
 
   useEffect(() => {
-    const initializeEmergencyScreen = async () => {
-      const uid = auth.currentUser?.uid;
+    // Start loading the screen immediately; GPS/profile/settings must not block it.
+    void fetchData();
 
-      if (uid) {
-        const saved = await saveCurrentLocation();
-
-        if (saved) {
-          await fetchUser(uid);
+    const uid = auth.currentUser?.uid;
+    if (uid) {
+      void (async () => {
+        try {
+          const saved = await saveCurrentLocation();
+          if (saved) await fetchUser(uid);
+        } catch (error) {
+          console.warn("Emergency background location update failed:", error);
         }
-
-        // Only fetch settings/bloodBank once we know a
-        // signed-in user exists — this collection's rules
-        // require an authenticated, active user, and calling
-        // it before Backend Auth has restored the session
-        // (auth.currentUser still null) causes a permission
-        // error even for users who are properly logged in.
-        await fetchBloodBankContact();
-      }
-
-      await fetchData();
-    };
-
-    initializeEmergencyScreen();
+      })();
+      void fetchBloodBankContact();
+    }
   }, []);
 
   // ======================================================
@@ -1295,9 +1313,7 @@ const Emergency = () => {
 
       if (newStatus === "Arrived") {
         Alert.alert("You've Arrived 📍", "The emergency reporter has been notified that you've arrived.");
-      } else if (newStatus === "On The Way") {
-        Alert.alert("Status Updated", "The emergency reporter has been notified that you're on the way.");
-      } else {
+      } else if (newStatus === "Completed") {
         Alert.alert("Status Updated", `Your emergency response status is now "${newStatus}".`);
       }
 
@@ -2341,7 +2357,7 @@ const Emergency = () => {
                         bare
                       />
 
-                      {req.requestType === "Emergency" && req.emergencyId && (
+                      {req.requestType === "Emergency" && Boolean(req.emergencyId) && (
                         <View className="border-t border-gray-100 px-4 py-3">
                           {/* ==============================================
                               META STRIP
@@ -2351,7 +2367,7 @@ const Emergency = () => {
                               pills competing for attention.
                           ============================================== */}
                           {(isMyEmergency ||
-                            (req.urgency && !isMyEmergency)) && (
+                            (Boolean(req.urgency) && !isMyEmergency)) && (
                             <View className="mb-3 flex-row flex-wrap items-center gap-x-4 gap-y-2 rounded-xl bg-gray-50 px-3 py-2.5">
                               {isMyEmergency && (
                                 <View className="flex-row items-center">
@@ -2366,7 +2382,7 @@ const Emergency = () => {
                                 </View>
                               )}
 
-                              {req.urgency && !isMyEmergency && (
+                              {Boolean(req.urgency) && !isMyEmergency && (
                                 <View className="flex-row items-center">
                                   <Ionicons
                                     name="flag-outline"
@@ -2379,7 +2395,7 @@ const Emergency = () => {
                                 </View>
                               )}
 
-                              {req.bloodSource && isMyEmergency && (
+                              {Boolean(req.bloodSource) && isMyEmergency && (
                                 <View className="flex-row items-center">
                                   <Ionicons
                                     name={
@@ -2630,7 +2646,7 @@ const Emergency = () => {
                                     </View>
                                   </View>
 
-                                  {myResponse.id && (
+                                  {Boolean(myResponse.id) && (
                                     <TouchableOpacity
                                       activeOpacity={0.85}
                                       onPress={() => router.push({
@@ -2766,6 +2782,7 @@ const Emergency = () => {
 
   return (
     <SafeAreaView className="flex-1 bg-white" edges={["bottom"]}>
+      <Stack.Screen options={{ title: screenView === "donors" ? "Ready Donors" : screenView === "requests" ? "Urgent Donor Requests" : "Emergency" }} />
       <StatusBar barStyle="dark-content" />
 
       {screenView === "home" ? (
