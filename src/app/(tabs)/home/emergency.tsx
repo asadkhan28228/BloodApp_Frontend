@@ -1970,15 +1970,15 @@ const Emergency = () => {
         paddingBottom: 40,
       }}
     >
-      <TouchableOpacity
+      {/* <TouchableOpacity
         onPress={() => router.push('/emergency-insights' as any)}
         className="mb-4 rounded-2xl bg-red-700 p-4"
       >
         <Text className="text-center font-bold text-white">Emergency Insights / Nearby Donors</Text>
         <Text className="mt-1 text-center text-xs text-white">Open from an emergency to load its ID</Text>
-      </TouchableOpacity>
+      </TouchableOpacity> */}
       {/* QUICK EMERGENCY REPORT */}
-     <View className="bg-slate-50 pb-4">
+     <View className="bg-white pb-4">
         <View className="mb-3 flex-row items-center">
           <View className="mr-3 h-11 w-11 items-center justify-center rounded-2xl bg-red-50">
             <Ionicons
@@ -2010,11 +2010,18 @@ const Emergency = () => {
                 activeOpacity={0.82}
                 className={
                   isLast
-                    ? "w-full flex-row items-center justify-center rounded-2xl border border-red-100 bg-red-50 px-4 py-3.5"
-                    : "w-[31.5%] items-center rounded-2xl border border-slate-200 bg-white px-2 py-3"
+                    ? "w-full flex-row items-center justify-center rounded-2xl border border-red-100 bg-[#FFF4F4] px-4 py-3.5"
+                    : "w-[31.5%] items-center rounded-2xl border border-[#E8EDF2] bg-white px-2 py-3"
                 }
               >
                 <View
+                  style={isLast ? undefined : {
+                    shadowColor: "#64748B",
+                    shadowOffset: { width: 0, height: 2 },
+                    shadowOpacity: 0.07,
+                    shadowRadius: 5,
+                    elevation: 2,
+                  }}
                   className={
                     isLast
                       ? "mr-2 h-8 w-8 items-center justify-center rounded-xl bg-white"

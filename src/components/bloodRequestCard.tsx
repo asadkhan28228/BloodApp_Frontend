@@ -1,10 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import React from "react";
-import {
-  Text,
-  TouchableOpacity,
-  View,
-} from "react-native";
+import { Text, TouchableOpacity, View } from "react-native";
 import Avatar from "./Avatar";
 
 interface BloodRequestCardProps {
@@ -39,243 +35,94 @@ const BloodRequestCard: React.FC<BloodRequestCardProps> = ({
   showCallButton = true,
   bare = false,
 }) => {
-  const unitCount =
-    units && Number(units) > 0
-      ? Number(units)
-      : 1;
-
-  const unitText =
-    unitCount === 1
-      ? "1 Unit"
-      : `${unitCount} Units`;
-
-  const accentColor = isUrgent
-    ? "#FF2D63"
-    : "#1687F8";
-
-  const badgeBackground = isUrgent
-    ? "#FFE8EE"
-    : "#E8F2FF";
+  const parsedUnits = Number(units);
+  const unitCount = Number.isFinite(parsedUnits) && parsedUnits > 0 ? parsedUnits : 1;
+  const accentColor = isUrgent ? "#E11D48" : "#2563EB";
+  const badgeBackground = isUrgent ? "#FFF1F2" : "#EFF6FF";
 
   const content = (
     <TouchableOpacity
       activeOpacity={0.9}
       onPress={onPress}
       disabled={!onPress}
-      className="overflow-hidden rounded-[22px] bg-white"
+      className="overflow-hidden rounded-[18px] bg-white"
     >
       <View className="flex-row">
+        <View style={{ width: 4, backgroundColor: accentColor }} />
 
-        {/* LEFT COLORED LINE */}
-        <View
-          style={{
-            width: 5,
-            backgroundColor: accentColor,
-          }}
-        />
-
-        {/* CARD BODY */}
-        <View className="min-h-[118px] flex-1 flex-row items-center px-[12px] py-[11px]">
-
-          {/* =========================
-              AVATAR
-          ========================= */}
-          <View className="relative mr-[13px]">
-
-            <View
-              className="
-                h-[72px]
-                w-[72px]
-                items-center
-                justify-center
-                overflow-hidden
-                rounded-[18px]
-                bg-[#F1F4FF]
-              "
-            >
-              <Avatar
-                name={avatarName || patientName}
-                photoUrl={avatarUrl}
-                size={72}
-              />
+        <View className="min-h-[104px] flex-1 flex-row items-center px-[10px] py-[12px]">
+          {/* Avatar and blood group */}
+          <View className="relative mr-[12px]">
+            <View className="h-[58px] w-[58px] items-center justify-center overflow-hidden rounded-[15px] bg-[#F1F4FF]">
+              <Avatar name={avatarName || patientName} photoUrl={avatarUrl} size={58} />
             </View>
-
-            {/* BLOOD TYPE BADGE */}
             <View
-              className="
-                absolute
-                -bottom-[7px]
-                -right-[7px]
-                h-[34px]
-                min-w-[34px]
-                items-center
-                justify-center
-                rounded-full
-                border-[3px]
-                border-white
-                bg-[#D90429]
-                px-[4px]
-              "
-              style={{
-                shadowColor: "#D90429",
-                shadowOffset: {
-                  width: 0,
-                  height: 2,
-                },
-                shadowOpacity: 0.18,
-                shadowRadius: 3,
-                elevation: 3,
-              }}
+              className="absolute -bottom-[7px] -right-[6px] min-h-[28px] min-w-[28px] items-center justify-center rounded-full border-[2px] border-white bg-[#D90429] px-[3px]"
             >
-              <Text className="text-[9px] font-black text-white">
-                {bloodType}
-              </Text>
+              <Text className="text-[9px] font-extrabold text-white">{bloodType}</Text>
             </View>
           </View>
 
-          {/* =========================
-              CENTER
-          ========================= */}
-          <View className="min-w-0 flex-1 justify-center">
-
-            {/* PATIENT NAME */}
+          {/* Main details */}
+          <View className="min-w-0 flex-1 justify-center pr-[3px]">
             <Text
               numberOfLines={1}
               ellipsizeMode="tail"
-              className="
-                text-[17px]
-                font-black
-                leading-[21px]
-                text-[#0F172A]
-              "
+              className="text-[14px] font-extrabold leading-[19px] text-[#111827]"
             >
               {patientName}
             </Text>
 
-            {/* LOCATION */}
-            <View className="mt-[8px] flex-row items-center">
-
-              <Ionicons
-                name="location"
-                size={16}
-                color="#E11D48"
-              />
-
+            <View className="mt-[7px] flex-row items-center">
+              <Ionicons name="location" size={13} color="#E11D48" />
               <Text
                 numberOfLines={1}
                 ellipsizeMode="tail"
-                className="
-                  ml-[7px]
-                  flex-1
-                  text-[12px]
-                  font-medium
-                  text-[#475569]
-                "
+                className="ml-[5px] flex-1 text-[11px] font-medium text-[#64748B]"
               >
                 {location}
               </Text>
             </View>
 
-            {/* TIME */}
-            <View className="mt-[8px] flex-row items-center">
-
-              <Ionicons
-                name="time-outline"
-                size={16}
-                color="#8B929C"
-              />
-
+            <View className="mt-[7px] flex-row items-center">
+              <Ionicons name="time-outline" size={13} color="#94A3B8" />
               <Text
                 numberOfLines={1}
-                className="
-                  ml-[7px]
-                  text-[10px]
-                  font-bold
-                  uppercase
-                  tracking-[0.3px]
-                  text-[#7C828D]
-                "
+                className="ml-[5px] flex-1 text-[9px] font-semibold uppercase tracking-[0.2px] text-[#94A3B8]"
               >
                 {timeAgo}
               </Text>
             </View>
           </View>
 
-          {/* =========================
-              RIGHT SIDE
-          ========================= */}
-          <View className="ml-[5px] w-[70px] items-center justify-center">
-
-            {/* UNIT */}
-            <Text
-              numberOfLines={1}
-              className="
-                text-[11px]
-                font-black
-                text-[#1E293B]
-              "
-            >
-              {unitText}
+          {/* Units, urgency and call */}
+          <View className="ml-[5px] w-[65px] items-center justify-center">
+            <Text numberOfLines={1} className="text-[10px] font-extrabold text-[#1E293B]">
+              {unitCount} {unitCount === 1 ? "Unit" : "Units"}
             </Text>
 
-            {/* NORMAL / URGENT */}
             <View
-              className="
-                mt-[7px]
-                h-[31px]
-                w-[70px]
-                flex-row
-                items-center
-                justify-center
-                rounded-full
-              "
-              style={{
-                backgroundColor: badgeBackground,
-              }}
+              className="mt-[7px] h-[25px] w-[65px] flex-row items-center justify-center rounded-full"
+              style={{ backgroundColor: badgeBackground }}
             >
-              <Ionicons
-                name="water"
-                size={14}
-                color={accentColor}
-              />
-
-              <Text
-                className="
-                  ml-[4px]
-                  text-[9px]
-                  font-black
-                "
-                style={{
-                  color: accentColor,
-                }}
-              >
+              <Ionicons name="water" size={11} color={accentColor} />
+              <Text className="ml-[3px] text-[9px] font-bold" style={{ color: accentColor }}>
                 {isUrgent ? "Urgent" : "Normal"}
               </Text>
             </View>
 
-            {/* CALL BUTTON */}
             {showCallButton && (
               <TouchableOpacity
                 activeOpacity={0.75}
+                accessibilityRole="button"
+                accessibilityLabel="Call request contact"
                 onPress={(event) => {
                   event.stopPropagation();
                   onCallPress?.();
                 }}
-                className="
-                  mt-[7px]
-                  h-[38px]
-                  w-[38px]
-                  items-center
-                  justify-center
-                  rounded-full
-                  bg-[#FFECEF]
-                "
+                className="mt-[7px] h-[30px] w-[30px] items-center justify-center rounded-full bg-[#FFF1F2]"
               >
-                <Ionicons
-                  name="call"
-                  size={18}
-                  color="#E11D48"
-                />
+                <Ionicons name="call" size={15} color="#E11D48" />
               </TouchableOpacity>
             )}
           </View>
@@ -284,29 +131,17 @@ const BloodRequestCard: React.FC<BloodRequestCardProps> = ({
     </TouchableOpacity>
   );
 
-  if (bare) {
-    return content;
-  }
+  if (bare) return content;
 
   return (
     <View
-      className="
-        mb-[12px]
-        overflow-hidden
-        rounded-[22px]
-        border
-        border-[#F1F5F9]
-        bg-white
-      "
+      className="mb-[12px] overflow-hidden rounded-[18px] border border-[#E8EDF3] bg-white"
       style={{
         shadowColor: "#64748B",
-        shadowOffset: {
-          width: 0,
-          height: 4,
-        },
-        shadowOpacity: 0.09,
-        shadowRadius: 8,
-        elevation: 4,
+        shadowOffset: { width: 0, height: 3 },
+        shadowOpacity: 0.07,
+        shadowRadius: 7,
+        elevation: 2,
       }}
     >
       {content}
