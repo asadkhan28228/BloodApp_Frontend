@@ -1,4 +1,6 @@
-import { useEffect, useState } from "react";
+
+import { useCallback, useState } from "react";
+import { useFocusEffect } from "@react-navigation/native";
 import { apiRequest } from "@/src/lib/api";
 
 export type ImpactStats = {
@@ -15,92 +17,63 @@ const initialStats: ImpactStats = {
   donatedMl: 0,
 };
 
+const asCount = (value: unknown): number => {
+  const n = Number(value);
+  return Number.isFinite(n) ? Math.max(0, n) : 0;
+};
+
 export const useImpactStats = () => {
   const [stats, setStats] = useState<ImpactStats>(initialStats);
 
-  useEffect(() => {
-    let mounted = true;
+  useFocusEffect(
+    useCallback(() => {
+      let active = true;
 
-    const loadImpactStats = async () => {
-      try {
-        // Logged-in user's latest profile
-        const profile = await apiRequest<any>("/api/auth/profile");
-
-        // Users are still loaded to calculate active donor count
-        let users: any[] = [];
-
+      const loadImpactStats = async () => {
         try {
-          users = await apiRequest<any[]>("/api/user");
-        } catch {
-          try {
-            users = await apiRequest<any[]>("/api/user/donors");
-          } catch {
-            users = [];
-          }
+          const response = await apiRequest<any>(
+            "/api/user/community-impact"
+          );
+
+          if (!active) return;
+
+          const data = response?.data ?? response;
+
+          setStats({
+            donations: asCount(
+              data?.donations ?? data?.Donations
+            ),
+            livesSaved: asCount(
+              data?.livesSaved ?? data?.LivesSaved
+            ),
+            bloodDonors: asCount(
+              data?.bloodDonors ?? data?.BloodDonors
+            ),
+            donatedMl: asCount(
+              data?.donatedMl ?? data?.DonatedMl
+            ),
+          });
+        } catch (error) {
+          console.error(
+            "Failed to load community impact:",
+            error
+          );
         }
+      };
 
-        if (!mounted) {
-          return;
-        }
+      void loadImpactStats();
 
-        const donations = Math.max(
-          0,
-          Number(
-            profile?.donationsCount ??
-              profile?.DonationsCount ??
-              0,
-          ) || 0,
-        );
+      const interval = setInterval(
+        () => void loadImpactStats(),
+        15000
+      );
 
-        const livesSaved = Math.max(
-          0,
-          Number(
-            profile?.livesSaved ??
-              profile?.LivesSaved ??
-              0,
-          ) || 0,
-        );
-
-        const activeDonors = users.filter(
-          (user) =>
-            user.role !== "admin" &&
-            user.role !== "bloodBankAdmin" &&
-            user.bloodType &&
-            user.isActive !== false,
-        );
-
-        setStats({
-          donations,
-          livesSaved,
-          bloodDonors: activeDonors.length,
-          donatedMl: donations * 540,
-        });
-      } catch (error) {
-        console.error(
-          "Failed to load impact stats:",
-          error,
-        );
-
-        if (mounted) {
-          setStats(initialStats);
-        }
-      }
-    };
-
-    loadImpactStats();
-
-    // Refresh stats so confirmed donations are reflected
-    // without requiring an app restart.
-    const interval = setInterval(
-      loadImpactStats,
-      5000,
-    );
-
-    return () => {
-      mounted = false;
-      clearInterval(interval);
-    };
-  }, []);
+      return () => {
+        active = false;
+        clearInterval(interval);
+      };
+    }, [])
+  );
 
   return stats;
 };

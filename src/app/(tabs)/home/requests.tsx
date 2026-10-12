@@ -46,7 +46,7 @@ const Requests = () => {
   const [responderActionLoading, setResponderActionLoading] = useState(false);
   const [bloodResponders, setBloodResponders] = useState<BloodRequestResponder[]>([]);
   const [inlineResponders, setInlineResponders] = useState<Record<string, BloodRequestResponder[]>>({});
-  const [responderModal, setResponderModal] = useState<{ request: any; response: BloodRequestResponder } | null>(null);
+  const [responderModal, setResponderModal] = useState<{ request: any } | null>(null);
   const [donationConfirmModal, setDonationConfirmModal] = useState<{ request: any; response: BloodRequestResponder } | null>(null);
   const [donationSuccessName, setDonationSuccessName] = useState<string | null>(null);
   const [responseSentVisible, setResponseSentVisible] = useState(false);
@@ -83,6 +83,8 @@ const Requests = () => {
           donorPhone:
             response.donorPhone ??
             response.DonorPhone,
+          donorLocation:
+            response.donorLocation ?? response.DonorLocation ?? response.location ?? response.Location,
           bloodType:
             response.bloodType ??
             response.BloodType,
@@ -957,7 +959,7 @@ const Requests = () => {
                         return (
                           <TouchableOpacity
                             activeOpacity={0.85}
-                            onPress={() => setResponderModal({ request: req, response: pending[0] })}
+                            onPress={() => setResponderModal({ request: req })}
                             className="mx-3 mb-3 flex-row items-center justify-center rounded-[17px] border border-[#D9EAFE] bg-[#EFF7FF] py-3.5"
                           >
                             <Ionicons name="person-circle" size={20} color="#2563EB" />
@@ -1080,7 +1082,7 @@ const Requests = () => {
       {/* ================================================
           REQUEST DETAIL MODAL
       ================================================ */}
-      {/* COMPACT RESPONDER DETAILS POPUP */}
+      {/* ALL RESPONDERS: scrollable compact cards, one per donor */}
       <Modal
         visible={responderModal !== null && donationConfirmModal === null}
         transparent
@@ -1088,94 +1090,93 @@ const Requests = () => {
         statusBarTranslucent
         onRequestClose={() => { if (!responderActionLoading) setResponderModal(null); }}
       >
-        <View className="flex-1 items-center justify-center bg-black/55 px-6">
+        <View className="flex-1 items-center justify-center bg-black/55 px-5">
           <TouchableOpacity
             activeOpacity={1}
             onPress={() => { if (!responderActionLoading) setResponderModal(null); }}
             style={{ position: "absolute", top: 0, bottom: 0, left: 0, right: 0 }}
           />
-          {responderModal && (
-            <View
-              className="w-full rounded-[24px] bg-white px-4 pb-4 pt-5"
-              style={{ maxWidth: 340, elevation: 12, shadowColor: "#000", shadowOpacity: 0.16, shadowRadius: 16 }}
-            >
-              <View className="items-center">
-                <View className="h-[58px] w-[58px] items-center justify-center rounded-full bg-[#EFF7FF]">
-                  <Ionicons name="person" size={31} color="#2563EB" />
-                </View>
-                <Text className="mt-3 text-[19px] font-black text-[#101828]">Responder Details</Text>
-                <Text className="mt-1 text-[11px] font-medium text-[#98A2B3]">Donor who offered to help</Text>
-              </View>
-
-              <View className="mt-4 rounded-[17px] border border-[#EDF0F4] bg-[#F9FAFC] p-3">
-                <View className="flex-row items-center">
-                  <View className="h-[44px] w-[44px] items-center justify-center rounded-[12px] bg-[#EAF3FF]">
-                    <Ionicons name="person" size={25} color="#2563EB" />
-                  </View>
-                  <View className="ml-3 flex-1">
-                    <Text numberOfLines={1} className="text-[15px] font-black text-[#111827]">
-                      {responderModal.response.donorName}
-                    </Text>
-                    <Text className="mt-0.5 text-[12px] font-extrabold text-[#DC2626]">
-                      {responderModal.response.bloodType || "N/A"}
-                    </Text>
-                  </View>
-                </View>
-
-                <View className="mt-3 flex-row items-center">
-                  <Ionicons name="call-outline" size={18} color="#7B8490" />
-                  <View className="ml-3 flex-1">
-                    <Text className="text-[9px] font-bold uppercase tracking-wider text-[#98A2B3]">Phone Number</Text>
-                    <Text className="mt-0.5 text-[12px] font-bold text-[#111827]">
-                      {responderModal.response.donorPhone || "Not available"}
-                    </Text>
-                  </View>
-                </View>
-
-                <View className="my-2.5 h-px bg-[#E5E7EB]" />
-                <View className="flex-row items-center">
-                  <Ionicons name="location-outline" size={18} color="#7B8490" />
-                  <View className="ml-3 flex-1">
-                    <Text className="text-[9px] font-bold uppercase tracking-wider text-[#98A2B3]">Location</Text>
-                    <Text numberOfLines={2} className="mt-0.5 text-[12px] font-bold text-[#111827]">
-                      {responderModal.response.donorLocation || "Not available"}
-                    </Text>
-                  </View>
-                </View>
-
-                <View className="mt-3 flex-row gap-2">
-                  <TouchableOpacity
-                    disabled={!responderModal.response.donorPhone || responderActionLoading}
-                    onPress={() => handleCall(responderModal.response.donorPhone)}
-                    className="h-[38px] flex-1 flex-row items-center justify-center rounded-[11px] bg-[#2563EB]"
-                    style={{ opacity: responderModal.response.donorPhone ? 1 : 0.5 }}
-                  >
-                    <Ionicons name="call" size={15} color="white" />
-                    <Text className="ml-1.5 text-[11px] font-black text-white">CALL</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    disabled={responderActionLoading}
-                    onPress={() => confirmInlineResponder(responderModal.request, responderModal.response)}
-                    className="h-[38px] flex-1 flex-row items-center justify-center rounded-[11px] bg-[#16A34A]"
-                  >
-                    {responderActionLoading ? <ActivityIndicator color="white" size="small" /> : (
-                      <>
-                        <Ionicons name="checkmark-circle" size={16} color="white" />
-                        <Text className="ml-1.5 text-[11px] font-black text-white">CONFIRM</Text>
-                      </>
-                    )}
-                  </TouchableOpacity>
-                </View>
-              </View>
-              <TouchableOpacity
-                disabled={responderActionLoading}
-                onPress={() => setResponderModal(null)}
-                className="mt-3 h-[39px] items-center justify-center rounded-[12px] border border-[#E5E7EB] bg-white"
+          {responderModal && (() => {
+            const currentResponses = (inlineResponders[String(responderModal.request.id)] || [])
+              .filter((item) => String(item.status || "Pending").toLowerCase() === "pending");
+            return (
+              <View
+                className="w-full rounded-[24px] bg-white px-4 pb-4 pt-5"
+                style={{ maxWidth: 360, maxHeight: "78%", elevation: 12, shadowColor: "#000", shadowOpacity: 0.16, shadowRadius: 16 }}
               >
-                <Text className="text-[12px] font-bold text-[#374151]">CLOSE</Text>
-              </TouchableOpacity>
-            </View>
-          )}
+                <View className="items-center pb-3">
+                  <View className="h-[52px] w-[52px] items-center justify-center rounded-full bg-[#EFF7FF]">
+                    <Ionicons name="people" size={28} color="#2563EB" />
+                  </View>
+                  <Text className="mt-2 text-[19px] font-black text-[#101828]">Responder Details</Text>
+                  <Text className="mt-1 text-[11px] font-medium text-[#98A2B3]">
+                    {currentResponses.length} {currentResponses.length === 1 ? "donor" : "donors"} offered to help
+                  </Text>
+                </View>
+                <ScrollView showsVerticalScrollIndicator={false} nestedScrollEnabled>
+                  {currentResponses.length === 0 ? (
+                    <Text className="py-6 text-center text-[12px] text-gray-500">No pending responders found.</Text>
+                  ) : currentResponses.map((response, index) => (
+                    <View key={response.id || String(index)} className="mb-3 rounded-[17px] border border-[#EDF0F4] bg-[#F9FAFC] p-3">
+                      <View className="flex-row items-center">
+                        <View className="h-[42px] w-[42px] items-center justify-center rounded-[12px] bg-[#EAF3FF]">
+                          <Ionicons name="person" size={24} color="#2563EB" />
+                        </View>
+                        <View className="ml-3 flex-1">
+                          <Text numberOfLines={1} className="text-[14px] font-black text-[#111827]">{response.donorName}</Text>
+                          <Text className="mt-0.5 text-[12px] font-extrabold text-[#DC2626]">{response.bloodType || "N/A"}</Text>
+                        </View>
+                        <View className="rounded-full bg-[#EAF3FF] px-2.5 py-1">
+                          <Text className="text-[10px] font-black text-[#2563EB]">#{index + 1}</Text>
+                        </View>
+                      </View>
+                      <View className="mt-3 flex-row items-center">
+                        <Ionicons name="call-outline" size={17} color="#7B8490" />
+                        <View className="ml-3 flex-1">
+                          <Text className="text-[9px] font-bold uppercase tracking-wider text-[#98A2B3]">Phone Number</Text>
+                          <Text className="mt-0.5 text-[12px] font-bold text-[#111827]">{response.donorPhone || "Not available"}</Text>
+                        </View>
+                      </View>
+                      <View className="my-2.5 h-px bg-[#E5E7EB]" />
+                      <View className="flex-row items-center">
+                        <Ionicons name="location-outline" size={17} color="#7B8490" />
+                        <View className="ml-3 flex-1">
+                          <Text className="text-[9px] font-bold uppercase tracking-wider text-[#98A2B3]">Location</Text>
+                          <Text numberOfLines={2} className="mt-0.5 text-[12px] font-bold text-[#111827]">{response.donorLocation || "Not available"}</Text>
+                        </View>
+                      </View>
+                      <View className="mt-3 flex-row gap-2">
+                        <TouchableOpacity
+                          disabled={!response.donorPhone || responderActionLoading}
+                          onPress={() => handleCall(response.donorPhone)}
+                          className="h-[38px] flex-1 flex-row items-center justify-center rounded-[11px] bg-[#2563EB]"
+                          style={{ opacity: response.donorPhone ? 1 : 0.5 }}
+                        >
+                          <Ionicons name="call" size={15} color="white" />
+                          <Text className="ml-1.5 text-[11px] font-black text-white">CALL</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          disabled={responderActionLoading}
+                          onPress={() => confirmInlineResponder(responderModal.request, response)}
+                          className="h-[38px] flex-1 flex-row items-center justify-center rounded-[11px] bg-[#16A34A]"
+                        >
+                          <Ionicons name="checkmark-circle" size={16} color="white" />
+                          <Text className="ml-1.5 text-[11px] font-black text-white">CONFIRM</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  ))}
+                </ScrollView>
+                <TouchableOpacity
+                  disabled={responderActionLoading}
+                  onPress={() => setResponderModal(null)}
+                  className="mt-2 h-[39px] items-center justify-center rounded-[12px] border border-[#E5E7EB] bg-white"
+                >
+                  <Text className="text-[12px] font-bold text-[#374151]">CLOSE</Text>
+                </TouchableOpacity>
+              </View>
+            );
+          })()}
         </View>
       </Modal>
       {/* Compact success dialog after donor offers blood */}
