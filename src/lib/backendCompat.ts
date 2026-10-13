@@ -139,7 +139,7 @@ function normalizeItem(item: any, id?: string) {
 async function fetchCollection(name: string, constraints: any[] = []) {
   let endpoint = '';
   switch (name) {
-    case 'users': endpoint = '/api/user'; break;
+    case 'users': endpoint = '/api/user/donors'; break;
     case 'blood-requests': endpoint = '/api/blood-requests'; break;
     case 'community_notifications': endpoint = '/api/community-notifications'; break;
     case 'notifications': endpoint = '/api/notifications'; break;
@@ -333,6 +333,30 @@ export async function updateDoc(ref: any, data: any) {
     if (body.isActive === false) { await apiRequest(`/api/user/admin/${ref.id}`, { method: 'DELETE' }); return; }
     if (body.isActive === true) { await apiRequest(`/api/user/admin/${ref.id}/activate`, { method: 'PUT' }); return; }
     if (body.role) { await apiRequest(`/api/user/admin/${ref.id}/role`, { method: 'PUT', body: JSON.stringify(body.role) }); return; }
+    // Always save availability through the dedicated endpoint so the backend
+    // broadcasts DonorAvailabilityUpdated, even when GPS is included.
+    if (typeof body.availableToDonate === 'boolean' &&
+        !Object.keys(body).some((key) => ['fullName', 'phoneNumber', 'bloodType', 'gender', 'location', 'avatarUrl', 'pushToken'].includes(key))) {
+      if (body.latitude !== undefined || body.longitude !== undefined) {
+        const profile = await apiRequest<any>('/api/auth/profile');
+        await apiRequest('/api/user/profile', { method: 'PUT', body: JSON.stringify({
+          fullName: profile.fullName,
+          phoneNumber: profile.phoneNumber,
+          bloodType: profile.bloodType,
+          gender: profile.gender,
+          location: profile.location,
+          latitude: body.latitude ?? profile.latitude,
+          longitude: body.longitude ?? profile.longitude,
+          availableToDonate: profile.availableToDonate,
+          avatarUrl: profile.avatarUrl,
+          pushToken: profile.pushToken,
+        }) });
+      }
+      await apiRequest('/api/user/availability', {
+        method: 'PUT', body: JSON.stringify(body.availableToDonate),
+      });
+      return;
+    }
     const profile = await apiRequest<any>('/api/auth/profile');
     await apiRequest('/api/user/profile', { method: 'PUT', body: JSON.stringify({
       fullName: body.fullName ?? profile.fullName,

@@ -3,16 +3,17 @@ import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
 import { useRouter } from "expo-router";
 import { collection, getDocs } from "@/src/lib/backendCompat";
-import { apiRequest } from "@/src/lib/api";
+import { apiRequest, API_BASE_URL, getAccessToken } from "@/src/lib/api";
+import * as signalR from "@microsoft/signalr";
 import { db } from "../../../config/backendConfig";
-import React, { useCallback, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Alert, Linking, ScrollView, StatusBar, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 const BLOOD_TYPE_FILTERS = ["All", "A+", "A-", "B+", "B-", "O+", "O-", "AB+", "AB-"];
 
 // Keep the donor list in component memory when revisiting this tab.
-const CACHE_TTL_MS = 30_000;
+const CACHE_TTL_MS = 0; // Always fetch current availability on focus
 
 const Donors = () => {
   const router = useRouter();
@@ -71,7 +72,7 @@ const Donors = () => {
         const role = String(donor.role ?? "").toLowerCase();
         const id = String(doc.id).toLowerCase();
         const donorId = String(donor.id ?? donor.Id ?? "").toLowerCase();
-        if (role !== "admin" && role !== "bloodbankadmin" && id !== currentUserId && donorId !== currentUserId) {
+        if (donor.availableToDonate === true && donor.isActive !== false && role !== "admin" && role !== "bloodbankadmin" && id !== currentUserId && donorId !== currentUserId) {
           nextDonors.push({ ...donor, id: doc.id });
         }
       });
@@ -93,6 +94,51 @@ const Donors = () => {
       fetchDonors();
     }
     return () => { requestId.current += 1; };
+  }, [fetchDonors]));
+
+  // Instant availability events while Find Donors is open.
+  useFocusEffect(useCallback(() => {
+    let disposed = false;
+    let hub: signalR.HubConnection | null = null;
+    let starting: Promise<void> | null = null;
+    const onAvailability = () => { if (!disposed) void fetchDonors(); };
+    const connect = async () => {
+      try {
+        const token = await getAccessToken();
+        if (!token || disposed) return;
+        const c = new signalR.HubConnectionBuilder()
+          .withUrl(`${API_BASE_URL}/notificationHub`, {
+            accessTokenFactory: async () => (await getAccessToken()) || token,
+          })
+          .withAutomaticReconnect([0, 2000, 5000, 10000, 30000])
+          .configureLogging(signalR.LogLevel.Warning)
+          .build();
+        hub = c;
+        c.on("DonorAvailabilityUpdated", onAvailability);
+        c.onreconnected(onAvailability);
+        starting = c.start();
+        await starting;
+        if (disposed) await c.stop();
+        else onAvailability();
+      } catch (error) {
+        if (!disposed) console.warn("Donor SignalR unavailable; fallback refresh active:", error);
+      }
+    };
+    void connect();
+    // Safety fallback when hosting or network drops SignalR.
+    const timer = setInterval(onAvailability, 5000);
+    return () => {
+      disposed = true;
+      clearInterval(timer);
+      if (hub) {
+        const c = hub;
+        c.off("DonorAvailabilityUpdated", onAvailability);
+        void (async () => {
+          if (starting) await starting.catch(() => undefined);
+          if (c.state !== signalR.HubConnectionState.Disconnected) await c.stop();
+        })().catch(() => undefined);
+      }
+    };
   }, [fetchDonors]));
 
   const handleSearch = (query: string) => setSearchQuery(query);

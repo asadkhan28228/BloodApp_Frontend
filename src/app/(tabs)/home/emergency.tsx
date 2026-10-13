@@ -390,10 +390,12 @@ const Emergency = () => {
             document.data();
 
           if (
-            data.availableToDonate !==
-              false &&
-            data.role !==
+            data.availableToDonate ===
+              true &&
+            data.isActive !== false &&
+            String(data.role ?? "").toLowerCase() !==
               "admin" &&
+            String(data.role ?? "").toLowerCase() !== "bloodbankadmin" &&
             document.id !==
               auth.currentUser?.uid
           ) {
@@ -701,6 +703,7 @@ const Emergency = () => {
 
         hub = connection;
         connection.on("EmergencyUpdated", refreshOnEvent);
+        connection.on("DonorAvailabilityUpdated", refreshOnEvent);
         connection.onreconnected(() => {
           if (!disposed) void refreshOnEvent();
         });
@@ -726,6 +729,7 @@ const Emergency = () => {
 
       const connection = hub;
       connection.off("EmergencyUpdated", refreshOnEvent);
+      connection.off("DonorAvailabilityUpdated", refreshOnEvent);
       // Defer stop until the initial connection attempt has finished.
       // Catch failed starts so cleanup does not create unhandled rejections.
       void (async () => {
@@ -738,6 +742,14 @@ const Emergency = () => {
       })().catch(() => undefined);
     };
   }, []);
+
+  // Donor availability fallback for hosts where SignalR cannot connect.
+  // SignalR event above is the immediate path; this recovers missed events.
+  useEffect(() => {
+    if (screenView !== "donors") return;
+    const timer = setInterval(() => { void fetchDataRef.current(); }, 5000);
+    return () => clearInterval(timer);
+  }, [screenView]);
 
   // Keep Community visibility in sync if a SignalR event was missed.
   // The server's /api/emergencies/active endpoint decides which donor

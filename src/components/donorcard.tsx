@@ -176,7 +176,7 @@ const Donorcard: React.FC<DonorCardProps> = ({
             </TouchableOpacity>
 
             {/* MESSAGE */}
-            <TouchableOpacity
+            {/* <TouchableOpacity
               onPress={(event) => {
                 event.stopPropagation();
                 onMessagePress?.();
@@ -193,7 +193,7 @@ const Donorcard: React.FC<DonorCardProps> = ({
               <Text className="ml-[3px] text-[9px] font-bold text-[#B91C2B]">
                 Message
               </Text>
-            </TouchableOpacity>
+            </TouchableOpacity> */}
           </View>
         </View>
 
