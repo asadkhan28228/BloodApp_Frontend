@@ -90,8 +90,8 @@ Notifications.setNotificationHandler({
 
 
 
-const BACKEND_SESSION_TIMEOUT_MS = 5000;
-
+// const BACKEND_SESSION_TIMEOUT_MS = 5000;
+const BACKEND_SESSION_TIMEOUT_MS = 20000;
 
 
 // ======================================================

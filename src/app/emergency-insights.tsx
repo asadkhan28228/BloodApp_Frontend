@@ -319,6 +319,6 @@ export default function EmergencyInsightsScreen() {
 
     </ScrollView>
 
-  </View>;
+ </View>;
 
 }
