@@ -1,10 +1,12 @@
+
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { sendPasswordResetEmail } from "@/src/lib/backendCompat";
-import { collection, getDocs, query, where } from "@/src/lib/backendCompat";
 import React, { useState } from "react";
+
 import {
   ActivityIndicator,
+  Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -14,80 +16,80 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+
 import { SafeAreaView } from "react-native-safe-area-context";
-import { auth, db } from "../../config/backendConfig";
+import { auth } from "../../config/backendConfig";
 
 const ForgotPassword = () => {
   const router = useRouter();
+
   const [email, setEmail] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
+  // =====================================================
+  // HANDLE FORGOT PASSWORD
+  // =====================================================
+
   const handleResetPassword = async () => {
+    const normalizedEmail = email.trim().toLowerCase();
+
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
     // 1. Required field
-    if (!email) {
-      alert("Please enter your email address");
+    if (!normalizedEmail) {
+      Alert.alert("Error", "Please enter your email address.");
       return;
     }
 
     // 2. Email validation
-    if (!emailRegex.test(email)) {
-      alert("Please enter a valid email address");
+    if (!emailRegex.test(normalizedEmail)) {
+      Alert.alert("Error", "Please enter a valid email address.");
       return;
     }
 
     setIsLoading(true);
 
     try {
-      // 🔍 3. Check if email exists in backend database
-      const q = query(collection(db, "users"), where("email", "==", email));
+      // 3. Directly call .NET Forgot Password API
+      // No protected users collection request
 
-      const querySnapshot = await getDocs(q);
+      await sendPasswordResetEmail(auth, normalizedEmail);
 
-      if (querySnapshot.empty) {
-        alert("No account found with this email.");
-        setIsLoading(false);
-        return;
-      }
-
-      // 📧 4. Send reset email
-      await sendPasswordResetEmail(auth, email);
-
-      alert("Password reset email sent! Please check your inbox.");
-      router.back();
+      // 4. Success message
+      Alert.alert(
+        "Reset Link Requested",
+        "If an account exists with this email, password reset instructions will be sent.",
+        [
+          {
+            text: "OK",
+            onPress: () => router.back(),
+          },
+        ]
+      );
     } catch (error: any) {
       console.error("Backend Reset Error:", error);
 
-      let errorMessage = "Failed to send reset email.";
+      const errorMessage =
+        error?.message ||
+        "Failed to send reset email. Please try again.";
 
-      if (error.code) {
-        switch (error.code) {
-          case "auth/invalid-email":
-            errorMessage = "Please enter a valid email address.";
-            break;
-
-          case "auth/too-many-requests":
-            errorMessage = "Too many requests. Please try again later.";
-            break;
-
-          case "auth/network-request-failed":
-            errorMessage = "Network error. Check your internet connection.";
-            break;
-
-          default:
-            errorMessage = error.message;
-        }
-      }
-
-      alert(errorMessage);
+      Alert.alert("Password Reset Failed", errorMessage);
     } finally {
       setIsLoading(false);
     }
   };
+
+  // =====================================================
+  // UI
+  // =====================================================
+
   return (
     <View className="flex-1 bg-white">
-      <StatusBar barStyle="dark-content" backgroundColor={"transparent"} />
+      <StatusBar
+        barStyle="dark-content"
+        backgroundColor="transparent"
+      />
+
       <SafeAreaView className="flex-1">
         <KeyboardAvoidingView
           behavior={Platform.OS === "ios" ? "padding" : "height"}
@@ -97,16 +99,19 @@ const ForgotPassword = () => {
             contentContainerStyle={{ flexGrow: 1 }}
             className="px-6 py-8"
             showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
           >
-            {/* Header Section - Synchronized */}
+            {/* Header Section */}
             <View className="mb-12 mt-4 items-center justify-center">
               <Text className="text-center text-4xl font-black tracking-tighter text-gray-900">
                 Recover Access
               </Text>
+
               <View className="mt-4 h-1.5 w-12 rounded-full bg-red-500" />
+
               <Text className="mt-6 text-center text-lg font-medium text-gray-400">
-                Enter your registered email and we&apos;ll{"\n"}send
-                instructions to reset your password.
+                Enter your registered email and we'll{"\n"}
+                send instructions to reset your password.
               </Text>
             </View>
 
@@ -116,13 +121,15 @@ const ForgotPassword = () => {
                 <Text className="mb-3 ml-1 text-sm font-bold uppercase tracking-widest text-gray-400">
                   Registered Email
                 </Text>
-                <View className="flex-row items-center rounded-2xl border border-gray-200 bg-white px-4 py-2 focus:border-red-500 shadow-sm shadow-black/5">
+
+                <View className="flex-row items-center rounded-2xl border border-gray-200 bg-white px-4 py-2 shadow-sm shadow-black/5">
                   <Ionicons
                     name="mail-outline"
                     size={20}
                     color="#6B7280"
                     style={{ marginRight: 12 }}
                   />
+
                   <TextInput
                     className="flex-1 text-base font-semibold text-gray-900"
                     placeholder="name@example.com"
@@ -131,22 +138,26 @@ const ForgotPassword = () => {
                     onChangeText={setEmail}
                     keyboardType="email-address"
                     autoCapitalize="none"
+                    autoCorrect={false}
                     editable={!isLoading}
                   />
                 </View>
               </View>
 
+              {/* Send Reset Link Button */}
               <TouchableOpacity
                 onPress={handleResetPassword}
                 disabled={isLoading}
                 activeOpacity={0.9}
-                className={`overflow-hidden rounded-2xl bg-red-600 shadow-2xl shadow-red-600/30 ${isLoading ? "opacity-70" : ""}`}
+                className={`overflow-hidden rounded-2xl bg-red-600 shadow-2xl shadow-red-600/30 ${
+                  isLoading ? "opacity-70" : ""
+                }`}
               >
                 <View className="items-center py-5">
                   {isLoading ? (
                     <ActivityIndicator color="white" />
                   ) : (
-                    <Text className="text-lg font-black text-white uppercase tracking-widest">
+                    <Text className="text-lg font-black uppercase tracking-widest text-white">
                       Send Reset Link
                     </Text>
                   )}
@@ -157,9 +168,13 @@ const ForgotPassword = () => {
             {/* Footer */}
             <View className="mt-auto items-center pb-6">
               <Text className="text-sm font-medium text-gray-400">
-                Found your password ?{" "}
+                Found your password?{" "}
                 <Text
-                  onPress={() => !isLoading && router.back()}
+                  onPress={() => {
+                    if (!isLoading) {
+                      router.back();
+                    }
+                  }}
                   className="text-red-600"
                 >
                   Sign In
